@@ -63,7 +63,7 @@ class Beam:
         self.uvls.append((x1, x2, w1, w2))
 
     def solve(self):
-        # -------- Nodes ----------
+        # ---------- nodes ----------
         nodes = set([0, self.length])
         for x in self.supports: nodes.add(x)
         for x in self.internal_hinges: nodes.add(x)
@@ -75,7 +75,7 @@ class Beam:
         n = len(nodes)
         dof = 2*n
 
-        # -------- Elements ----------
+        # ---------- elements ----------
         elements = []
         for i in range(n-1):
             elements.append(BeamElement(nodes[i+1]-nodes[i]))
@@ -83,7 +83,7 @@ class Beam:
         K = np.zeros((dof,dof))
         F = np.zeros(dof)
 
-        # -------- Stiffness ----------
+        # ---------- stiffness assembly ----------
         for i,el in enumerate(elements):
             k = el.stiffness()
             idx = [2*i,2*i+1,2*i+2,2*i+3]
@@ -91,7 +91,7 @@ class Beam:
                 for b in range(4):
                     K[idx[a],idx[b]] += k[a,b]
 
-        # -------- Internal hinge ----------
+        # ---------- internal hinge ----------
         for x in self.internal_hinges:
             i = nodes.index(x)
             r = 2*i + 1
@@ -99,71 +99,82 @@ class Beam:
             K[:,r] = 0
             K[r,r] = 1e-9
 
-        # -------- Point loads ----------
+        # ---------- point loads ----------
         for x,P in self.point_loads:
             i = nodes.index(x)
             F[2*i] += P
 
-        # -------- UDL ----------
+        # ---------- UDL ----------
         for x1,x2,w in self.udls:
             for i in range(n-1):
                 a,b = nodes[i], nodes[i+1]
-                overlap = max(0, min(b,x2) - max(a,x1))
+                overlap = max(0, min(b,x2)-max(a,x1))
                 if overlap > 0:
                     fe = elements[i].udl_eq(w * overlap/(b-a))
                     idx=[2*i,2*i+1,2*i+2,2*i+3]
                     for j in range(4): F[idx[j]] += fe[j]
 
-        # -------- UVL ----------
+        # ---------- UVL ----------
         for x1,x2,w1,w2 in self.uvls:
             for i in range(n-1):
                 a,b = nodes[i], nodes[i+1]
-                overlap = max(0, min(b,x2) - max(a,x1))
+                overlap = max(0, min(b,x2)-max(a,x1))
                 if overlap > 0:
                     r = overlap/(b-a)
                     fe = elements[i].uvl_eq(w1*r, w2*r)
                     idx=[2*i,2*i+1,2*i+2,2*i+3]
                     for j in range(4): F[idx[j]] += fe[j]
 
-        # -------- Supports ----------
+        # ---------- supports ----------
         fixed=[]
         for x,st in self.supports.items():
-            i=nodes.index(x)
+            i = nodes.index(x)
             if st=="fixed": fixed+=[2*i,2*i+1]
             elif st in ["hinge","roller"]: fixed+=[2*i]
 
-        free=list(set(range(dof))-set(fixed))
+        free = list(set(range(dof))-set(fixed))
 
-        # -------- Solve ----------
-        D=np.zeros(dof)
-        D[free]=np.linalg.solve(K[np.ix_(free,free)],F[free])
+        # ---------- solve ----------
+        D = np.zeros(dof)
+        D[free] = np.linalg.solve(K[np.ix_(free,free)], F[free])
 
-        # -------- Reactions ----------
-        R=K@D-F
-        reactions={}
+        # ---------- reactions ----------
+        R = K @ D - F
+        reactions = {}
         for x in self.supports:
-            i=nodes.index(x)
-            reactions[x]=round(R[2*i],3)
+            i = nodes.index(x)
+            reactions[x] = round(R[2*i],3)
 
-        # -------- BOOK STYLE SF & BM ----------
-        shear={}
-        moment={}
-
+        # ---------- FEM element forces ----------
+        elem_forces = []
         for i,el in enumerate(elements):
             f = el.stiffness() @ D[[2*i,2*i+1,2*i+2,2*i+3]]
-            V_L = -f[0]
-            V_R =  f[2]
-            M_L =  f[1]
-            M_R = -f[3]
+            elem_forces.append(f)
 
-            shear[nodes[i]] = round(V_L,3)
-            moment[nodes[i]] = round(M_L,3)
+        # ---------- FEM-CORRECT SHEAR & MOMENT AT NODES ----------
+        shear = {}
+        moment = {}
 
-            if i == len(elements)-1:
-                shear[nodes[i+1]] = round(V_R,3)
-                moment[nodes[i+1]] = round(M_R,3)
+        for i,x in enumerate(nodes):
+            V = 0
+            M = 0
 
-        for x in self.internal_hinges:
-            moment[x] = 0
+            # contribution from left element
+            if i > 0:
+                fL = elem_forces[i-1]
+                V += fL[2]      # right shear of left element
+                M += -fL[3]     # right moment of left element
+
+            # contribution from right element
+            if i < len(elements):
+                fR = elem_forces[i]
+                V += -fR[0]     # left shear of right element
+                M += fR[1]      # left moment of right element
+
+            if x in self.internal_hinges:
+                M = 0
+
+            shear[x] = round(V,3)
+            moment[x] = round(M,3)
 
         return reactions, shear, moment
