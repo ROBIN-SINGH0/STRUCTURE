@@ -132,4 +132,3 @@ class Beam:
             ))
 
         return reactions, BM
-vvvvvvvvvvvvvvv
