@@ -98,18 +98,38 @@ class Beam:
         D[free] = np.linalg.solve(K[np.ix_(free, free)], F[free])
 
         # -------- reactions ----------
-        R = K @ D - F
+        R_full = K @ D - F
+
+        # extract only support reactions (vertical)
+        reactions = {}
+        for x, st in self.supports.items():
+            i = nodes.index(x)
+            Ry = R_full[2*i]
+            if abs(Ry) < 1e-6:
+                Ry = 0
+            reactions[x] = round(Ry, 3)
 
         # -------- bending moment ----------
         BM = []
         for i, el in enumerate(elements):
             k = el.stiffness()
             idx = [2*i, 2*i+1, 2*i+2, 2*i+3]
-            d_local = D[idx]
-            f_local = k @ d_local
+            f_local = k @ D[idx]
 
             M_left = f_local[1]
             M_right = -f_local[3]
-            BM.append((nodes[i], nodes[i+1], M_left, M_right))
 
-        return nodes, R, BM
+            if abs(M_left) < 1e-6:
+                M_left = 0
+            if abs(M_right) < 1e-6:
+                M_right = 0
+
+            BM.append((
+                nodes[i],
+                nodes[i+1],
+                round(M_left, 3),
+                round(M_right, 3)
+            ))
+
+        return reactions, BM
+vvvvvvvvvvvvvvv
