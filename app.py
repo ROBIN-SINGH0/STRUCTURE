@@ -1,7 +1,7 @@
 import streamlit as st
 from beam_solver import Beam
 
-st.title("Beam Bending Moment Solver (Matrix Method)")
+st.title("Beam Reaction & Bending Moment Solver")
 
 # -------- beam ----------
 L = st.number_input("Beam Length (m)", value=10.0)
@@ -41,14 +41,15 @@ for i in range(int(n_loads)):
 
 # -------- solve ----------
 if st.button("Solve"):
-    nodes, R, BM = beam.solve()
+    reactions, BM = beam.solve()
 
-    st.subheader("Support Reactions")
-    st.write(R)
+    st.subheader("Support Reactions (Vertical)")
+    for x, r in reactions.items():
+        st.write(f"Support at x = {x} m → Reaction = {r} kN")
 
-    st.subheader("Bending Moments (Element-wise)")
+    st.subheader("Bending Moment (Element-wise)")
     for i, bm in enumerate(BM):
         st.write(
             f"Element {i+1} ({bm[0]} m → {bm[1]} m): "
-            f"M_left = {bm[2]:.3f}, M_right = {bm[3]:.3f}"
+            f"M_left = {bm[2]} kN·m, M_right = {bm[3]} kN·m"
         )
