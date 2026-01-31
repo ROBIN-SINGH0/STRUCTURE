@@ -1,7 +1,7 @@
 import numpy as np
 
 # -----------------------------
-# Beam Element
+# Beam Element (Euler–Bernoulli)
 # -----------------------------
 class BeamElement:
     def __init__(self, L):
@@ -10,9 +10,9 @@ class BeamElement:
     def stiffness(self):
         L = self.L
         return (1 / L**3) * np.array([
-            [12, 6*L, -12, 6*L],
+            [12,   6*L,  -12,   6*L],
             [6*L, 4*L**2, -6*L, 2*L**2],
-            [-12, -6*L, 12, -6*L],
+            [-12, -6*L,   12,  -6*L],
             [6*L, 2*L**2, -6*L, 4*L**2]
         ])
 
@@ -63,27 +63,25 @@ class Beam:
         self.uvls.append((x1, x2, w1, w2))
 
     def solve(self):
-        # ---------- nodes ----------
-        nodes = set([0, self.length])
+        # ---------- Nodes ----------
+        nodes = {0, self.length}
         for x in self.supports: nodes.add(x)
         for x in self.internal_hinges: nodes.add(x)
         for x,_ in self.point_loads: nodes.add(x)
-        for x1,x2,_ in self.udls: nodes.add(x1); nodes.add(x2)
-        for x1,x2,_,_ in self.uvls: nodes.add(x1); nodes.add(x2)
+        for x1,x2,_ in self.udls: nodes.update([x1,x2])
+        for x1,x2,_,_ in self.uvls: nodes.update([x1,x2])
 
         nodes = sorted(nodes)
         n = len(nodes)
         dof = 2*n
 
-        # ---------- elements ----------
-        elements = []
-        for i in range(n-1):
-            elements.append(BeamElement(nodes[i+1]-nodes[i]))
+        # ---------- Elements ----------
+        elements = [BeamElement(nodes[i+1]-nodes[i]) for i in range(n-1)]
 
         K = np.zeros((dof,dof))
         F = np.zeros(dof)
 
-        # ---------- stiffness assembly ----------
+        # ---------- Stiffness assembly ----------
         for i,el in enumerate(elements):
             k = el.stiffness()
             idx = [2*i,2*i+1,2*i+2,2*i+3]
@@ -91,7 +89,7 @@ class Beam:
                 for b in range(4):
                     K[idx[a],idx[b]] += k[a,b]
 
-        # ---------- internal hinge ----------
+        # ---------- Internal hinges ----------
         for x in self.internal_hinges:
             i = nodes.index(x)
             r = 2*i + 1
@@ -99,7 +97,7 @@ class Beam:
             K[:,r] = 0
             K[r,r] = 1e-9
 
-        # ---------- point loads ----------
+        # ---------- Point loads ----------
         for x,P in self.point_loads:
             i = nodes.index(x)
             F[2*i] += P
@@ -110,9 +108,10 @@ class Beam:
                 a,b = nodes[i], nodes[i+1]
                 overlap = max(0, min(b,x2)-max(a,x1))
                 if overlap > 0:
-                    fe = elements[i].udl_eq(w * overlap/(b-a))
-                    idx=[2*i,2*i+1,2*i+2,2*i+3]
-                    for j in range(4): F[idx[j]] += fe[j]
+                    fe = elements[i].udl_eq(w*overlap/(b-a))
+                    idx = [2*i,2*i+1,2*i+2,2*i+3]
+                    for j in range(4):
+                        F[idx[j]] += fe[j]
 
         # ---------- UVL ----------
         for x1,x2,w1,w2 in self.uvls:
@@ -122,36 +121,34 @@ class Beam:
                 if overlap > 0:
                     r = overlap/(b-a)
                     fe = elements[i].uvl_eq(w1*r, w2*r)
-                    idx=[2*i,2*i+1,2*i+2,2*i+3]
-                    for j in range(4): F[idx[j]] += fe[j]
+                    idx = [2*i,2*i+1,2*i+2,2*i+3]
+                    for j in range(4):
+                        F[idx[j]] += fe[j]
 
-        # ---------- supports ----------
+        # ---------- Supports ----------
         fixed=[]
         for x,st in self.supports.items():
             i = nodes.index(x)
-            if st=="fixed": fixed+=[2*i,2*i+1]
-            elif st in ["hinge","roller"]: fixed+=[2*i]
+            if st=="fixed": fixed += [2*i,2*i+1]
+            elif st in ["hinge","roller"]: fixed += [2*i]
 
-        free = list(set(range(dof))-set(fixed))
+        free = list(set(range(dof)) - set(fixed))
 
-        # ---------- solve ----------
+        # ---------- Solve ----------
         D = np.zeros(dof)
         D[free] = np.linalg.solve(K[np.ix_(free,free)], F[free])
 
-        # ---------- reactions ----------
-        R = K @ D - F
-        reactions = {}
-        for x in self.supports:
-            i = nodes.index(x)
-            reactions[x] = round(R[2*i],3)
+        # ---------- Reactions ----------
+        R = K@D - F
+        reactions = {x: round(R[2*nodes.index(x)],3) for x in self.supports}
 
-        # ---------- FEM element forces ----------
+        # ---------- Element end forces ----------
         elem_forces = []
         for i,el in enumerate(elements):
             f = el.stiffness() @ D[[2*i,2*i+1,2*i+2,2*i+3]]
             elem_forces.append(f)
 
-        # ---------- FEM-CORRECT SHEAR & MOMENT AT NODES ----------
+        # ---------- FEM nodal shear & moment ----------
         shear = {}
         moment = {}
 
@@ -159,17 +156,15 @@ class Beam:
             V = 0
             M = 0
 
-            # contribution from left element
             if i > 0:
                 fL = elem_forces[i-1]
-                V += fL[2]      # right shear of left element
-                M += -fL[3]     # right moment of left element
+                V += fL[2]
+                M += -fL[3]
 
-            # contribution from right element
             if i < len(elements):
                 fR = elem_forces[i]
-                V += -fR[0]     # left shear of right element
-                M += fR[1]      # left moment of right element
+                V += -fR[0]
+                M += fR[1]
 
             if x in self.internal_hinges:
                 M = 0
