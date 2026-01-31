@@ -26,6 +26,15 @@ class BeamElement:
              P*a*a*b/L**2
         ])
 
+    def udl_eq(self, w):
+        L = self.L
+        return np.array([
+            -w*L/2,
+            -w*L**2/12,
+            -w*L/2,
+             w*L**2/12
+        ])
+
 
 # -----------------------------
 # Beam Model
@@ -33,14 +42,18 @@ class BeamElement:
 class Beam:
     def __init__(self, length):
         self.length = length
-        self.supports = {}        # x : type
-        self.point_loads = []     # (x, P)
+        self.supports = {}          # x : type
+        self.point_loads = []       # (x, P)
+        self.udls = []              # (x1, x2, w)
 
     def add_support(self, x, stype):
         self.supports[x] = stype.lower()
 
     def add_point_load(self, x, P):
         self.point_loads.append((x, P))
+
+    def add_udl(self, x1, x2, w):
+        self.udls.append((x1, x2, w))
 
     def solve(self):
         # -------- create nodes ----------
@@ -49,6 +62,9 @@ class Beam:
             nodes.add(x)
         for x, _ in self.point_loads:
             nodes.add(x)
+        for x1, x2, _ in self.udls:
+            nodes.add(x1)
+            nodes.add(x2)
 
         nodes = sorted(nodes)
         n = len(nodes)
@@ -79,8 +95,18 @@ class Beam:
                 idx = [2*i, 2*i+1, 2*i+2, 2*i+3]
                 for j in range(4):
                     F[idx[j]] += fe[j]
-            else:
-                F[2*i] += P
+
+        # -------- apply UDL (PARTIAL UDL WORKS HERE) ----------
+        for x1, x2, w in self.udls:
+            for i in range(n - 1):
+                a = nodes[i]
+                b = nodes[i+1]
+
+                if a >= x1 and b <= x2:
+                    fe = elements[i].udl_eq(w)
+                    idx = [2*i, 2*i+1, 2*i+2, 2*i+3]
+                    for j in range(4):
+                        F[idx[j]] += fe[j]
 
         # -------- apply supports ----------
         fixed = []
