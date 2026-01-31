@@ -1,5 +1,4 @@
 import streamlit as st
-import matplotlib.pyplot as plt
 from beam_solver import Beam
 
 # -------------------------------------------------
@@ -188,17 +187,11 @@ with st.expander("📊 Uniformly Varying Load (UVL)"):
         st.divider()
 
 # -------------------------------------------------
-# Solve Button
+# Solve
 # -------------------------------------------------
 st.markdown("<br>", unsafe_allow_html=True)
-colL, colC, colR = st.columns([1, 2, 1])
+solve = st.button("🚀 Solve Beam", use_container_width=True)
 
-with colC:
-    solve = st.button("🚀 Solve Beam", use_container_width=True)
-
-# -------------------------------------------------
-# Results
-# -------------------------------------------------
 if solve:
     reactions, shear, moment = beam.solve()
 
@@ -213,31 +206,8 @@ if solve:
 
     with col2:
         st.markdown("### 🟢 Shear Force (Nodes)")
-        for x in sorted(shear):
-            st.info(f"V({x}) = {shear[x]} N")
+        st.line_chart(shear)
 
     with col3:
         st.markdown("### 🔴 Bending Moment (Nodes)")
-        for x in sorted(moment):
-            st.warning(f"M({x}) = {moment[x]} N·m")
-
-    # -------------------------------------------------
-    # Plots
-    # -------------------------------------------------
-    st.markdown("## 📈 Diagrams")
-
-    x_vals = list(shear.keys())
-    v_vals = list(shear.values())
-    m_vals = list(moment.values())
-
-    fig, ax = plt.subplots(2, 1, figsize=(8, 5))
-
-    ax[0].plot(x_vals, v_vals, marker="o")
-    ax[0].set_title("Shear Force Diagram")
-    ax[0].grid(True)
-
-    ax[1].plot(x_vals, m_vals, marker="o")
-    ax[1].set_title("Bending Moment Diagram")
-    ax[1].grid(True)
-
-    st.pyplot(fig)
+        st.line_chart(moment)
