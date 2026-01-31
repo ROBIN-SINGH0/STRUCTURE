@@ -100,9 +100,8 @@ class Beam:
         # -------- reactions ----------
         R_full = K @ D - F
 
-        # extract only support reactions (vertical)
         reactions = {}
-        for x, st in self.supports.items():
+        for x in self.supports:
             i = nodes.index(x)
             Ry = R_full[2*i]
             if abs(Ry) < 1e-6:
