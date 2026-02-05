@@ -62,7 +62,10 @@ class Beam:
     def add_uvl(self, x1, x2, w1, w2):
         self.uvls.append((x1, x2, w1, w2))
 
-    def solve(self, npts=20):
+    # =====================================================
+    # SOLVER (WITH SMOOTH / BOOK-STYLE POINT LOAD LOGIC)
+    # =====================================================
+    def solve(self, npts=20, smooth_point_load=True, eps_ratio=0.02):
 
         # ---------- Nodes ----------
         nodes = {0, self.length}
@@ -88,7 +91,7 @@ class Beam:
             idx = [2*i,2*i+1,2*i+2,2*i+3]
             K[np.ix_(idx,idx)] += k
 
-        # ---------- Internal hinges ----------
+        # ---------- Internal Hinges ----------
         for x in self.internal_hinges:
             i = nodes.index(x)
             r = 2*i + 1
@@ -96,10 +99,26 @@ class Beam:
             K[:,r] = 0
             K[r,r] = 1e-9
 
-        # ---------- Loads ----------
-        for x,P in self.point_loads:
-            F[2*nodes.index(x)] += P
+        # ---------- POINT LOADS (Exact OR Smoothed) ----------
+        eps = eps_ratio * self.length
 
+        for x, P in self.point_loads:
+            if smooth_point_load:
+                # convert point load to small UDL
+                x1 = max(0.0, x - eps/2)
+                x2 = min(self.length, x + eps/2)
+                w = P / (x2 - x1)
+
+                for i in range(n-1):
+                    a, b = nodes[i], nodes[i+1]
+                    ov = max(0, min(b, x2) - max(a, x1))
+                    if ov > 0:
+                        fe = elements[i].udl_eq(w * ov / (b - a))
+                        F[2*i:2*i+4] += fe
+            else:
+                F[2*nodes.index(x)] += P
+
+        # ---------- UDL ----------
         for x1,x2,w in self.udls:
             for i in range(n-1):
                 a,b = nodes[i], nodes[i+1]
@@ -108,6 +127,7 @@ class Beam:
                     fe = elements[i].udl_eq(w*ov/(b-a))
                     F[2*i:2*i+4] += fe
 
+        # ---------- UVL ----------
         for x1,x2,w1,w2 in self.uvls:
             for i in range(n-1):
                 a,b = nodes[i], nodes[i+1]
@@ -136,7 +156,7 @@ class Beam:
         R = K@D - F
         reactions = {x: round(R[2*nodes.index(x)],3) for x in self.supports}
 
-        # ---------- Element forces ----------
+        # ---------- Element Forces ----------
         elem_forces = []
         for i,el in enumerate(elements):
             f = el.stiffness() @ D[2*i:2*i+4]
@@ -161,19 +181,14 @@ class Beam:
                 V_all.append(round(V,3))
                 M_all.append(round(M,3))
 
-        # ---------- IMPROVED FREE-END RULE ----------
+        # ---------- Free-End Rule ----------
         tol = 1e-6
         free_end = self.length
+        load_at_free_end = any(abs(px-free_end)<tol for px,_ in self.point_loads)
 
-        # check if point load exists at free end
-        load_at_free_end = any(abs(px - free_end) < tol for px,_ in self.point_loads)
-
-        for i, xv in enumerate(x_all):
-            if abs(xv - free_end) < tol and free_end not in self.supports:
-                # BM always zero at free end
+        for i,xv in enumerate(x_all):
+            if abs(xv-free_end)<tol and free_end not in self.supports:
                 M_all[i] = 0.0
-
-                # SF zero ONLY if no load at free end
                 if not load_at_free_end:
                     V_all[i] = 0.0
 
