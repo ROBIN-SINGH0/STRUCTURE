@@ -62,9 +62,9 @@ class Beam:
     def add_uvl(self, x1, x2, w1, w2):
         self.uvls.append((x1, x2, w1, w2))
 
-    # =====================================================
-    # SOLVER (BOOK-STYLE POINT LOAD + CORRECT FREE-END LOGIC)
-    # =====================================================
+    # =================================================
+    # SOLVER (WITH BOOK-STYLE POINT LOAD SMOOTHING)
+    # =================================================
     def solve(self, npts=500, smooth_point_load=True, eps_ratio=0.15):
 
         # ---------- Nodes ----------
@@ -77,7 +77,7 @@ class Beam:
 
         nodes = sorted(nodes)
         n = len(nodes)
-        dof = 2 * n
+        dof = 2*n
 
         # ---------- Elements ----------
         elements = [BeamElement(nodes[i+1] - nodes[i]) for i in range(n-1)]
@@ -115,7 +115,7 @@ class Beam:
                         fe = elements[i].udl_eq(w * ov / (b - a))
                         F[2*i:2*i+4] += fe
             else:
-                F[2 * nodes.index(x)] += P
+                F[2*nodes.index(x)] += P
 
         # ---------- UDL ----------
         for x1, x2, w in self.udls:
@@ -142,7 +142,7 @@ class Beam:
             i = nodes.index(x)
             if st == "fixed":
                 fixed += [2*i, 2*i+1]
-            elif st in ["hinge", "roller"]:
+            else:
                 fixed += [2*i]
 
         free = list(set(range(dof)) - set(fixed))
@@ -179,15 +179,16 @@ class Beam:
                 V_all.append(V)
                 M_all.append(M)
 
-        # ---------- FREE-END RULE (FIXED) ----------
+        # ---------- Free End Rule ----------
         tol = 1e-6
         free_end = self.length
+        load_at_free_end = any(abs(px - free_end) < tol for px,_ in self.point_loads)
 
         for i, xv in enumerate(x_all):
             if abs(xv - free_end) < tol and free_end not in self.supports:
-                # Bending moment is always zero at free end
                 M_all[i] = 0.0
-                # DO NOT force shear to zero if point load exists
+                if not load_at_free_end:
+                    V_all[i] = 0.0
 
         return {
             "reactions": reactions,
