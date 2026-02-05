@@ -161,13 +161,10 @@ class Beam:
                 V_all.append(V)
                 M_all.append(M)
 
-        # =====================================================
-        # FINAL BOUNDARY CORRECTION (ALWAYS APPLY)
-        # =====================================================
+        # ---------- FREE END FIX (Fig 6.18) ----------
         tol = 1e-6
-
-        # ---------- FREE END ----------
         free_end = self.length
+
         P_free = 0.0
         for px, P in self.point_loads:
             if abs(px - free_end) < tol:
@@ -180,17 +177,6 @@ class Beam:
                     V_all[i] = P_free
                 else:
                     V_all[i] = 0.0
-
-        # ---------- FIXED END (x = 0) ----------
-        if 0 in self.supports and self.supports[0] == "fixed":
-            idxA = nodes.index(0)
-            RA = R[2*idxA]
-            MA = R[2*idxA + 1]
-
-            for i, xv in enumerate(x_all):
-                if abs(xv - 0.0) < tol:
-                    V_all[i] = RA
-                    M_all[i] = MA
 
         return {
             "reactions": reactions,
