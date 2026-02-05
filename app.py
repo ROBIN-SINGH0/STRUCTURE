@@ -3,7 +3,7 @@ import pandas as pd
 from beam_solver import Beam
 
 # -------------------------------------------------
-# Safe input function
+# Safe input helpers (keyboard friendly)
 # -------------------------------------------------
 def get_float(label, default):
     val = st.text_input(label, default)
@@ -141,30 +141,80 @@ with st.expander("📊 Uniformly Varying Load (UVL)"):
 # Solve
 # -------------------------------------------------
 if st.button("🚀 Solve Beam", use_container_width=True):
+
     result = beam.solve()
 
-    st.success("Analysis completed")
+    x = result["x"]
+    V = result["shear"]
+    M = result["moment"]
+    reactions = result["reactions"]
 
-    st.markdown("### 🔵 Support Reactions")
-    for x, r in result["reactions"].items():
-        st.info(f"x = {x} m → {r} N")
+    st.success("Analysis completed successfully")
 
+    # -----------------------------
+    # Reactions
+    # -----------------------------
+    st.markdown("## 🔵 Support Reactions")
+    cols = st.columns(len(reactions))
+    for i, (xp, r) in enumerate(reactions.items()):
+        cols[i].metric(f"x = {xp} m", f"{r} N")
+
+    # -----------------------------
+    # SF & BM key values (LIKE reactions)
+    # -----------------------------
+    st.markdown("## 📌 Key Shear Force & Bending Moment Values")
+
+    c1, c2 = st.columns(2)
+
+    with c1:
+        st.markdown("### 🟢 Shear Force")
+        st.metric("Maximum SF", f"{max(V)} N")
+        st.metric("Minimum SF", f"{min(V)} N")
+
+    with c2:
+        st.markdown("### 🔴 Bending Moment")
+        st.metric("Maximum BM", f"{max(M)} N·m")
+        st.metric("Minimum BM", f"{min(M)} N·m")
+
+    # -----------------------------
+    # SF & BM at supports
+    # -----------------------------
+    st.markdown("## 🧱 SF & BM at Supports")
+
+    for xs in beam.supports.keys():
+        idx = min(range(len(x)), key=lambda i: abs(x[i] - xs))
+        st.info(
+            f"Support at x = {xs} m → "
+            f"SF = {V[idx]} N , "
+            f"BM = {M[idx]} N·m"
+        )
+
+    # -----------------------------
+    # Diagrams
+    # -----------------------------
     col1, col2 = st.columns(2)
 
     with col1:
         st.markdown("### 🟢 Shear Force Diagram")
         st.line_chart(
-            pd.DataFrame({
-                "x": result["x"],
-                "Shear": result["shear"]
-            }).set_index("x")
+            pd.DataFrame({"x": x, "Shear (N)": V}).set_index("x")
         )
 
     with col2:
         st.markdown("### 🔴 Bending Moment Diagram")
         st.line_chart(
-            pd.DataFrame({
-                "x": result["x"],
-                "Moment": result["moment"]
-            }).set_index("x")
+            pd.DataFrame({"x": x, "Moment (N·m)": M}).set_index("x")
         )
+
+    # -----------------------------
+    # Full table
+    # -----------------------------
+    st.markdown("### 📋 SF & BM at Every Point")
+    st.dataframe(
+        pd.DataFrame({
+            "x (m)": x,
+            "Shear (N)": V,
+            "Moment (N·m)": M
+        }),
+        use_container_width=True
+    )
