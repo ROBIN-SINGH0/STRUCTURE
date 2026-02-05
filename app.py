@@ -19,6 +19,19 @@ def get_int(label, default):
     except:
         return int(default)
 
+def generate_labels(n):
+    labels = []
+    for i in range(n):
+        s = ""
+        x = i
+        while True:
+            s = chr(65 + x % 26) + s
+            x = x // 26 - 1
+            if x < 0:
+                break
+        labels.append(s)
+    return labels
+
 # -----------------------------
 # Page
 # -----------------------------
@@ -52,7 +65,7 @@ with st.expander("🧱 Supports", expanded=True):
         with c2:
             stype = st.selectbox(
                 f"Support type {i+1}",
-                ["fixed", "hinge", "roller"],
+                ["fixed", "hinge", "roller", "internal_hinge"],
                 key=f"s{i}"
             )
         beam.add_support(x, stype)
@@ -107,7 +120,7 @@ with st.expander("📊 UVL"):
 # -----------------------------
 if st.button("🚀 Solve Beam", use_container_width=True):
 
-    result = beam.solve(npts=200)
+    result = beam.solve(npts=300)
 
     x = result["x"]
     V = result["shear"]
@@ -117,26 +130,44 @@ if st.button("🚀 Solve Beam", use_container_width=True):
     st.success("Analysis completed")
 
     # -----------------------------
-    # REACTIONS (IMPORTANT)
+    # REACTIONS
     # -----------------------------
     st.markdown("## 🔵 Support Reactions")
     for xp, r in reactions.items():
         st.write(f"Reaction at x = {xp} m = **{r} N**")
 
     # -----------------------------
-    # SF & BM ANSWERS (TEXTBOOK)
+    # ALL KEY POINTS (THIS WAS MISSING)
     # -----------------------------
-    st.markdown("## 📘 Shear Force & Bending Moment Values")
+    key_points = set()
+    key_points.add(0)
+    key_points.add(L)
 
-    key_points = sorted(set([0, L] + list(reactions.keys())))
+    for x,_ in beam.point_loads:
+        key_points.add(x)
 
-    labels = [chr(65+i) for i in range(len(key_points))]
+    for x1,x2,_ in beam.udls:
+        key_points.add(x1)
+        key_points.add(x2)
+
+    for x1,x2,_,_ in beam.uvls:
+        key_points.add(x1)
+        key_points.add(x2)
+
+    for x in beam.supports:
+        key_points.add(x)
+
+    key_points = sorted(key_points)
+    labels = generate_labels(len(key_points))
+
+    st.markdown("## 📘 SF & BM at ALL Important Points")
 
     for lbl, xp in zip(labels, key_points):
         idx = min(range(len(x)), key=lambda i: abs(x[i] - xp))
         st.write(
-            f"**S.F. at {lbl}** = {V[idx]} N , "
-            f"**B.M. at {lbl}** = {M[idx]} N·m"
+            f"**Point {lbl} (x = {xp} m)** → "
+            f"S.F. = {V[idx]} N , "
+            f"B.M. = {M[idx]} N·m"
         )
 
     # -----------------------------
