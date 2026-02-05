@@ -20,6 +20,22 @@ def get_int(label, default):
         return int(default)
 
 # -------------------------------------------------
+# Generate dynamic labels: A, B, ..., Z, AA, AB ...
+# -------------------------------------------------
+def generate_labels(n):
+    labels = []
+    for i in range(n):
+        label = ""
+        x = i
+        while True:
+            label = chr(65 + x % 26) + label
+            x = x // 26 - 1
+            if x < 0:
+                break
+        labels.append(label)
+    return labels
+
+# -------------------------------------------------
 # Page config
 # -------------------------------------------------
 st.set_page_config(
@@ -151,47 +167,39 @@ if st.button("🚀 Solve Beam", use_container_width=True):
 
     st.success("Analysis completed successfully")
 
-    # -----------------------------
-    # Reactions
-    # -----------------------------
-    st.markdown("## 🔵 Support Reactions")
-    cols = st.columns(len(reactions))
-    for i, (xp, r) in enumerate(reactions.items()):
-        cols[i].metric(f"x = {xp} m", f"{r} N")
+    # -------------------------------------------------
+    # TEXTBOOK STYLE OUTPUT (AUTO POINTS)
+    # -------------------------------------------------
+    st.markdown("## 📘 Shear Force & Bending Moment (Textbook Format)")
 
-    # -----------------------------
-    # SF & BM key values (LIKE reactions)
-    # -----------------------------
-    st.markdown("## 📌 Key Shear Force & Bending Moment Values")
+    # key points = beam ends + supports + load points
+    key_points = set([0, L])
+    key_points.update(beam.supports.keys())
+    key_points.update([p[0] for p in beam.point_loads])
 
-    c1, c2 = st.columns(2)
+    key_points = sorted(key_points)
+    labels = generate_labels(len(key_points))
 
-    with c1:
-        st.markdown("### 🟢 Shear Force")
-        st.metric("Maximum SF", f"{max(V)} N")
-        st.metric("Minimum SF", f"{min(V)} N")
+    for label, xp in zip(labels, key_points):
+        idx = min(range(len(x)), key=lambda i: abs(x[i] - xp))
 
-    with c2:
-        st.markdown("### 🔴 Bending Moment")
-        st.metric("Maximum BM", f"{max(M)} N·m")
-        st.metric("Minimum BM", f"{min(M)} N·m")
-
-    # -----------------------------
-    # SF & BM at supports
-    # -----------------------------
-    st.markdown("## 🧱 SF & BM at Supports")
-
-    for xs in beam.supports.keys():
-        idx = min(range(len(x)), key=lambda i: abs(x[i] - xs))
-        st.info(
-            f"Support at x = {xs} m → "
-            f"SF = {V[idx]} N , "
-            f"BM = {M[idx]} N·m"
+        st.markdown(
+            f"""
+**S.F. at {label}** (x = {xp} m) = **{V[idx]} N**  
+**M at {label}** (x = {xp} m) = **{M[idx]} N·m**
+            """
         )
 
-    # -----------------------------
+    # -------------------------------------------------
+    # Reactions
+    # -------------------------------------------------
+    st.markdown("## 🔵 Support Reactions")
+    for xp, r in reactions.items():
+        st.write(f"Reaction at x = {xp} m = **{r} N**")
+
+    # -------------------------------------------------
     # Diagrams
-    # -----------------------------
+    # -------------------------------------------------
     col1, col2 = st.columns(2)
 
     with col1:
@@ -206,9 +214,9 @@ if st.button("🚀 Solve Beam", use_container_width=True):
             pd.DataFrame({"x": x, "Moment (N·m)": M}).set_index("x")
         )
 
-    # -----------------------------
+    # -------------------------------------------------
     # Full table
-    # -----------------------------
+    # -------------------------------------------------
     st.markdown("### 📋 SF & BM at Every Point")
     st.dataframe(
         pd.DataFrame({
