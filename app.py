@@ -132,22 +132,22 @@ if st.button("🚀 Solve Beam", use_container_width=True):
 
     result = beam.solve(npts=300)
 
-    x = result["x"]          # SIGNED (for graph)
-    V = result["shear"]      # SIGNED
-    M = result["moment"]     # SIGNED
+    x = result["x"]
+    V = result["shear"]
+    M = result["moment"]
     reactions = result["reactions"]
 
     st.success("Analysis completed")
 
     # -----------------------------
-    # Reactions (Magnitude)
+    # Reactions
     # -----------------------------
-    st.markdown("## 🔵 Support Reactions (Magnitude)")
+    st.markdown("## 🔵 Support Reactions")
     for xs, r in reactions.items():
         st.write(f"Reaction at x = {xs} m = **{abs(r)} N**")
 
     # -----------------------------
-    # Key points
+    # Key points (Book style)
     # -----------------------------
     key_points = {0, L}
 
@@ -166,11 +166,10 @@ if st.button("🚀 Solve Beam", use_container_width=True):
     key_points = sorted(key_points)
     labels = generate_labels(len(key_points))
 
-    st.markdown("## 📘 Shear Force & Bending Moment (Book Answers)")
+    st.markdown("## 📘 Shear Force & Bending Moment (Book Values)")
 
     for lbl, xp in zip(labels, key_points):
         idx = min(range(len(x)), key=lambda i: abs(x[i] - xp))
-
         st.write(
             f"**Point {lbl} (x = {xp} m)** → "
             f"S.F. = {abs(V[idx])} N , "
@@ -178,7 +177,7 @@ if st.button("🚀 Solve Beam", use_container_width=True):
         )
 
     # -----------------------------
-    # Diagrams (SIGNED → CORRECT SHAPE)
+    # Diagrams
     # -----------------------------
     col1, col2 = st.columns(2)
 
@@ -186,7 +185,7 @@ if st.button("🚀 Solve Beam", use_container_width=True):
         fig, ax = plt.subplots()
         ax.step(x, V, where="post")
         ax.axhline(0)
-        ax.set_title("Shear Force Diagram (Signed)")
+        ax.set_title("Shear Force Diagram")
         ax.set_xlabel("Length (m)")
         ax.set_ylabel("Shear Force (N)")
         ax.grid(True)
@@ -197,9 +196,9 @@ if st.button("🚀 Solve Beam", use_container_width=True):
         fig, ax = plt.subplots()
         ax.plot(x, M)
         ax.axhline(0)
-        ax.set_title("Bending Moment Diagram (Signed)")
+        ax.set_title("Bending Moment Diagram")
         ax.set_xlabel("Length (m)")
         ax.set_ylabel("Bending Moment (N·m)")
         ax.grid(True)
         st.pyplot(fig)
-        plt.close(fig) 
+        plt.close(fig)
