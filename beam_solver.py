@@ -161,13 +161,21 @@ class Beam:
                 V_all.append(round(V,3))
                 M_all.append(round(M,3))
 
-        # ---------- ONLY NEW PART (OUTPUT CLEANING) ----------
-        # Free end → SF = 0, BM = 0 (textbook rule)
+        # ---------- IMPROVED FREE-END RULE ----------
         tol = 1e-6
+        free_end = self.length
+
+        # check if point load exists at free end
+        load_at_free_end = any(abs(px - free_end) < tol for px,_ in self.point_loads)
+
         for i, xv in enumerate(x_all):
-            if xv not in self.supports and abs(xv - 0) > tol and abs(xv - self.length) < tol:
-                V_all[i] = 0.0
+            if abs(xv - free_end) < tol and free_end not in self.supports:
+                # BM always zero at free end
                 M_all[i] = 0.0
+
+                # SF zero ONLY if no load at free end
+                if not load_at_free_end:
+                    V_all[i] = 0.0
 
         return {
             "reactions": reactions,
