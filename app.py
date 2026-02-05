@@ -199,15 +199,33 @@ if solve:
 
     col1, col2, col3 = st.columns(3)
 
+    # -----------------------------
+    # Support Reactions
+    # -----------------------------
     with col1:
         st.markdown("### 🔵 Support Reactions")
         for x, r in reactions.items():
             st.success(f"x = {x} m → {r} N")
 
+    # -----------------------------
+    # Shear Force
+    # -----------------------------
     with col2:
         st.markdown("### 🟢 Shear Force (Nodes)")
         st.line_chart(shear)
 
+    # -----------------------------
+    # Bending Moment
+    # -----------------------------
     with col3:
         st.markdown("### 🔴 Bending Moment (Nodes)")
         st.line_chart(moment)
+
+    # -------------------------------------------------
+    # ⭐ NEW PART: BENDING MOMENT AT SUPPORTS
+    # -------------------------------------------------
+    st.markdown("## ⭐ Bending Moment at Supports")
+
+    for x, stype in beam.supports.items():
+        bm = moment.get(x, 0.0)
+        st.info(f"Support at x = {x} m ({stype}) → M = {bm} N·m")
