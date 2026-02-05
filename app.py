@@ -136,39 +136,45 @@ if st.button("🚀 Solve Beam", use_container_width=True):
     for xp, r in reactions.items():
         st.write(f"Reaction at x = {xp} m = **{r} N**")
 
-    # -----------------------------
-    # ALL KEY POINTS (THIS WAS MISSING)
-    # -----------------------------
-    key_points = set()
-    key_points.add(0)
-    key_points.add(L)
+   # -----------------------------
+# ALL KEY POINTS
+# -----------------------------
+key_points = set()
+key_points.add(0)
+key_points.add(L)
 
-    for x,_ in beam.point_loads:
-        key_points.add(x)
+for xp,_ in beam.point_loads:
+    key_points.add(xp)
 
-    for x1,x2,_ in beam.udls:
-        key_points.add(x1)
-        key_points.add(x2)
+for x1,x2,_ in beam.udls:
+    key_points.add(x1)
+    key_points.add(x2)
 
-    for x1,x2,_,_ in beam.uvls:
-        key_points.add(x1)
-        key_points.add(x2)
+for x1,x2,_,_ in beam.uvls:
+    key_points.add(x1)
+    key_points.add(x2)
 
-    for x in beam.supports:
-        key_points.add(x)
+for xs in beam.supports:
+    key_points.add(xs)
 
-    key_points = sorted(key_points)
-    labels = generate_labels(len(key_points))
+key_points = sorted(key_points)
 
-    st.markdown("## 📘 SF & BM at ALL Important Points")
+labels = generate_labels(len(key_points))
 
-    for lbl, xp in zip(labels, key_points):
-        idx = min(range(len(x)), key=lambda i: abs(x[i] - xp))
-        st.write(
-            f"**Point {lbl} (x = {xp} m)** → "
-            f"S.F. = {V[idx]} N , "
-            f"B.M. = {M[idx]} N·m"
-        )
+st.markdown("## 📘 SF & BM at ALL Important Points")
+
+x_coords = result["x"]     # 👈 keep array safe
+V = result["shear"]
+M = result["moment"]
+
+for lbl, xp in zip(labels, key_points):
+    idx = min(range(len(x_coords)), key=lambda i: abs(x_coords[i] - xp))
+    st.write(
+        f"**Point {lbl} (x = {xp} m)** → "
+        f"S.F. = {V[idx]} N , "
+        f"B.M. = {M[idx]} N·m"
+    )
+
 
     # -----------------------------
     # Diagrams
