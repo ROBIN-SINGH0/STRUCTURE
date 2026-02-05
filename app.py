@@ -3,7 +3,7 @@ import matplotlib.pyplot as plt
 from beam_solver import Beam
 
 # -----------------------------
-# helpers
+# Helpers
 # -----------------------------
 def get_float(label, default):
     val = st.text_input(label, default)
@@ -33,7 +33,7 @@ def generate_labels(n):
     return labels
 
 # -----------------------------
-# Page
+# Page config
 # -----------------------------
 st.set_page_config(page_title="Beam Solver – FEM", layout="wide")
 
@@ -47,72 +47,92 @@ st.markdown("""
 # Beam input
 # -----------------------------
 col1, col2 = st.columns(2)
+
 with col1:
     L = get_float("📏 Beam Length (m)", "2.0")
+
 with col2:
-    n_sup = get_int("🧱 Number of supports", "1")
+    n_sup = get_int("🧱 Number of supports / internal hinges", "1")
 
 beam = Beam(length=L)
 
 # -----------------------------
 # Supports
 # -----------------------------
-with st.expander("🧱 Supports", expanded=True):
+with st.expander("🧱 Supports / Internal Hinges", expanded=True):
     for i in range(n_sup):
         c1, c2 = st.columns(2)
+
         with c1:
-            x = get_float(f"Support position {i+1} (m)", "0.0")
+            xs = get_float(f"Position {i+1} (m)", "0.0")
+
         with c2:
             stype = st.selectbox(
-                f"Support type {i+1}",
+                f"Type {i+1}",
                 ["fixed", "hinge", "roller", "internal_hinge"],
                 key=f"s{i}"
             )
-        beam.add_support(x, stype)
+
+        beam.add_support(xs, stype)
 
 # -----------------------------
-# Point Load
+# Point Loads
 # -----------------------------
-with st.expander("📍 Point Load"):
+with st.expander("📍 Point Loads"):
     n_pl = get_int("Number of point loads", "0")
+
     for i in range(n_pl):
         c1, c2 = st.columns(2)
+
         with c1:
-            P = get_float(f"P{i+1} (N, downward -)", "-1")
+            P = get_float(f"P{i+1} (N) (downward −)", "-1")
+
         with c2:
-            xP = get_float(f"x{i+1} (m)", str(L/2))
-        beam.add_point_load(xP, P)
+            xp = get_float(f"x{i+1} (m)", str(L/2))
+
+        beam.add_point_load(xp, P)
 
 # -----------------------------
 # UDL
 # -----------------------------
-with st.expander("📐 UDL"):
+with st.expander("📐 Uniformly Distributed Load (UDL)"):
     n_udl = get_int("Number of UDLs", "0")
+
     for i in range(n_udl):
         c1, c2, c3 = st.columns(3)
+
         with c1:
             w = get_float(f"w{i+1} (N/m)", "-1")
+
         with c2:
-            x1 = get_float(f"start x{i+1}", "0.0")
+            x1 = get_float(f"Start x{i+1} (m)", "0.0")
+
         with c3:
-            x2 = get_float(f"end x{i+1}", str(L))
+            x2 = get_float(f"End x{i+1} (m)", str(L))
+
         beam.add_udl(x1, x2, w)
 
 # -----------------------------
 # UVL
 # -----------------------------
-with st.expander("📊 UVL"):
+with st.expander("📊 Uniformly Varying Load (UVL)"):
     n_uvl = get_int("Number of UVLs", "0")
+
     for i in range(n_uvl):
         c1, c2, c3, c4 = st.columns(4)
+
         with c1:
-            w1 = get_float(f"w1{i+1}", "0")
+            w1 = get_float(f"w1{i+1} (N/m)", "0")
+
         with c2:
-            w2 = get_float(f"w2{i+1}", "-1")
+            w2 = get_float(f"w2{i+1} (N/m)", "-1")
+
         with c3:
-            x1 = get_float(f"start x{i+1}", "0.0")
+            x1 = get_float(f"Start x{i+1} (m)", "0.0")
+
         with c4:
-            x2 = get_float(f"end x{i+1}", str(L))
+            x2 = get_float(f"End x{i+1} (m)", str(L))
+
         beam.add_uvl(x1, x2, w1, w2)
 
 # -----------------------------
@@ -122,7 +142,7 @@ if st.button("🚀 Solve Beam", use_container_width=True):
 
     result = beam.solve(npts=300)
 
-    x = result["x"]
+    x_coords = result["x"]
     V = result["shear"]
     M = result["moment"]
     reactions = result["reactions"]
@@ -130,51 +150,49 @@ if st.button("🚀 Solve Beam", use_container_width=True):
     st.success("Analysis completed")
 
     # -----------------------------
-    # REACTIONS
+    # Reactions
     # -----------------------------
     st.markdown("## 🔵 Support Reactions")
-    for xp, r in reactions.items():
-        st.write(f"Reaction at x = {xp} m = **{r} N**")
+    for xs, r in reactions.items():
+        st.write(f"Reaction at x = {xs} m = **{r} N**")
 
-   # -----------------------------
-# ALL KEY POINTS
-# -----------------------------
-key_points = set()
-key_points.add(0)
-key_points.add(L)
+    # -----------------------------
+    # ALL IMPORTANT POINTS
+    # -----------------------------
+    key_points = set()
+    key_points.add(0)
+    key_points.add(L)
 
-for xp,_ in beam.point_loads:
-    key_points.add(xp)
+    for xp,_ in beam.point_loads:
+        key_points.add(xp)
 
-for x1,x2,_ in beam.udls:
-    key_points.add(x1)
-    key_points.add(x2)
+    for x1,x2,_ in beam.udls:
+        key_points.add(x1)
+        key_points.add(x2)
 
-for x1,x2,_,_ in beam.uvls:
-    key_points.add(x1)
-    key_points.add(x2)
+    for x1,x2,_,_ in beam.uvls:
+        key_points.add(x1)
+        key_points.add(x2)
 
-for xs in beam.supports:
-    key_points.add(xs)
+    for xs in beam.supports:
+        key_points.add(xs)
 
-key_points = sorted(key_points)
+    key_points = sorted(key_points)
+    labels = generate_labels(len(key_points))
 
-labels = generate_labels(len(key_points))
+    st.markdown("## 📘 Shear Force & Bending Moment Values")
 
-st.markdown("## 📘 SF & BM at ALL Important Points")
+    for lbl, xp in zip(labels, key_points):
+        idx = min(
+            range(len(x_coords)),
+            key=lambda i: abs(x_coords[i] - xp)
+        )
 
-x_coords = result["x"]     # 👈 keep array safe
-V = result["shear"]
-M = result["moment"]
-
-for lbl, xp in zip(labels, key_points):
-    idx = min(range(len(x_coords)), key=lambda i: abs(x_coords[i] - xp))
-    st.write(
-        f"**Point {lbl} (x = {xp} m)** → "
-        f"S.F. = {V[idx]} N , "
-        f"B.M. = {M[idx]} N·m"
-    )
-
+        st.write(
+            f"**Point {lbl} (x = {xp} m)** → "
+            f"S.F. = {V[idx]} N , "
+            f"B.M. = {M[idx]} N·m"
+        )
 
     # -----------------------------
     # Diagrams
@@ -183,18 +201,22 @@ for lbl, xp in zip(labels, key_points):
 
     with col1:
         fig, ax = plt.subplots()
-        ax.step(x, V, where="post")
+        ax.step(x_coords, V, where="post")
         ax.axhline(0)
         ax.set_title("Shear Force Diagram")
+        ax.set_xlabel("Length (m)")
+        ax.set_ylabel("Shear Force (N)")
         ax.grid(True)
         st.pyplot(fig)
         plt.close(fig)
 
     with col2:
         fig, ax = plt.subplots()
-        ax.plot(x, M)
+        ax.plot(x_coords, M)
         ax.axhline(0)
         ax.set_title("Bending Moment Diagram")
+        ax.set_xlabel("Length (m)")
+        ax.set_ylabel("Bending Moment (N·m)")
         ax.grid(True)
         st.pyplot(fig)
         plt.close(fig)
