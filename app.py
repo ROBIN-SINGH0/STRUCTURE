@@ -1,11 +1,13 @@
 import streamlit as st
+import numpy as np
+import pandas as pd
 from beam_solver import Beam
 
 # -------------------------------------------------
 # Page config
 # -------------------------------------------------
 st.set_page_config(
-    page_title="Beam Solver – Matrix Method",
+    page_title="Beam Solver – FEM",
     layout="wide"
 )
 
@@ -15,7 +17,7 @@ st.set_page_config(
 st.markdown("""
 <h1 style='text-align:center;'>🧱 Beam Solver</h1>
 <h4 style='text-align:center;color:gray;'>
-Matrix (Stiffness / FEM) Method
+Matrix / FEM Method
 </h4>
 <hr>
 """, unsafe_allow_html=True)
@@ -26,7 +28,7 @@ Matrix (Stiffness / FEM) Method
 col1, col2 = st.columns(2)
 
 with col1:
-    L = st.number_input("📏 Beam Length (m)", value=2.0)
+    L = st.number_input("📏 Beam Length (m)", value=6.0)
 
 with col2:
     n_sup = st.number_input(
@@ -84,7 +86,7 @@ with st.expander("📍 Point Loads"):
         with c1:
             P = st.number_input(
                 f"Load P{i+1} (N)",
-                value=-300.0,
+                value=-1000.0,
                 key=f"P{i}"
             )
 
@@ -193,39 +195,45 @@ st.markdown("<br>", unsafe_allow_html=True)
 solve = st.button("🚀 Solve Beam", use_container_width=True)
 
 if solve:
-    reactions, shear, moment = beam.solve()
+    result = beam.solve()
+
+    reactions = result["reactions"]
+    x = result["x"]
+    V = result["shear"]
+    M = result["moment"]
 
     st.markdown("## 📊 Results")
 
-    col1, col2, col3 = st.columns(3)
+    # -----------------------------
+    # Reactions
+    # -----------------------------
+    st.markdown("### 🔵 Support Reactions")
+    cols = st.columns(len(reactions))
+    for i, (xp, r) in enumerate(reactions.items()):
+        cols[i].metric(label=f"x = {xp} m", value=f"{r} N")
 
     # -----------------------------
-    # Support Reactions
+    # Charts
     # -----------------------------
-    with col1:
-        st.markdown("### 🔵 Support Reactions")
-        for x, r in reactions.items():
-            st.success(f"x = {x} m → {r} N")
+    c1, c2 = st.columns(2)
+
+    with c1:
+        st.markdown("### 🟢 Shear Force Diagram")
+        df_shear = pd.DataFrame({"x": x, "Shear (N)": V})
+        st.line_chart(df_shear.set_index("x"))
+
+    with c2:
+        st.markdown("### 🔴 Bending Moment Diagram")
+        df_moment = pd.DataFrame({"x": x, "Moment (N·m)": M})
+        st.line_chart(df_moment.set_index("x"))
 
     # -----------------------------
-    # Shear Force
+    # Table
     # -----------------------------
-    with col2:
-        st.markdown("### 🟢 Shear Force (Nodes)")
-        st.line_chart(shear)
-
-    # -----------------------------
-    # Bending Moment
-    # -----------------------------
-    with col3:
-        st.markdown("### 🔴 Bending Moment (Nodes)")
-        st.line_chart(moment)
-
-    # -------------------------------------------------
-    # ⭐ NEW PART: BENDING MOMENT AT SUPPORTS
-    # -------------------------------------------------
-    st.markdown("## ⭐ Bending Moment at Supports")
-
-    for x, stype in beam.supports.items():
-        bm = moment.get(x, 0.0)
-        st.info(f"Support at x = {x} m ({stype}) → M = {bm} N·m")
+    st.markdown("### 📋 Values at Every Point")
+    df = pd.DataFrame({
+        "x (m)": x,
+        "Shear (N)": V,
+        "Moment (N·m)": M
+    })
+    st.dataframe(df, use_container_width=True)
