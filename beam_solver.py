@@ -62,7 +62,11 @@ class Beam:
     def add_uvl(self, x1, x2, w1, w2):
         self.uvls.append((x1, x2, w1, w2))
 
-    def solve(self):
+    # -----------------------------
+    # SOLVER
+    # -----------------------------
+    def solve(self, npts=20):
+
         # ---------- Nodes ----------
         nodes = {0, self.length}
         for x in self.supports: nodes.add(x)
@@ -81,7 +85,7 @@ class Beam:
         K = np.zeros((dof,dof))
         F = np.zeros(dof)
 
-        # ---------- Stiffness assembly ----------
+        # ---------- Stiffness ----------
         for i,el in enumerate(elements):
             k = el.stiffness()
             idx = [2*i,2*i+1,2*i+2,2*i+3]
@@ -89,7 +93,7 @@ class Beam:
                 for b in range(4):
                     K[idx[a],idx[b]] += k[a,b]
 
-        # ---------- Internal hinges ----------
+        # ---------- Internal Hinges ----------
         for x in self.internal_hinges:
             i = nodes.index(x)
             r = 2*i + 1
@@ -97,7 +101,7 @@ class Beam:
             K[:,r] = 0
             K[r,r] = 1e-9
 
-        # ---------- Point loads ----------
+        # ---------- Point Loads ----------
         for x,P in self.point_loads:
             i = nodes.index(x)
             F[2*i] += P
@@ -142,34 +146,35 @@ class Beam:
         R = K@D - F
         reactions = {x: round(R[2*nodes.index(x)],3) for x in self.supports}
 
-        # ---------- Element end forces ----------
+        # ---------- Element End Forces ----------
         elem_forces = []
         for i,el in enumerate(elements):
             f = el.stiffness() @ D[[2*i,2*i+1,2*i+2,2*i+3]]
             elem_forces.append(f)
 
-        # ---------- FEM nodal shear & moment ----------
-        shear = {}
-        moment = {}
+        # ---------- SF & BM at EVERY POINT ----------
+        x_all, V_all, M_all = [], [], []
 
-        for i,x in enumerate(nodes):
-            V = 0
-            M = 0
+        for i,el in enumerate(elements):
+            L = el.L
+            f = elem_forces[i]
 
-            if i > 0:
-                fL = elem_forces[i-1]
-                V += fL[2]
-                M += -fL[3]
+            V1, M1 = -f[0],  f[1]
+            V2, M2 =  f[2], -f[3]
 
-            if i < len(elements):
-                fR = elem_forces[i]
-                V += -fR[0]
-                M += fR[1]
+            for j in range(npts+1):
+                x = j*L/npts
+                V = V1 + (V2-V1)*(x/L)
+                M = M1*(1-x/L) + M2*(x/L) + V1*x*(1-x/L)
 
-            if x in self.internal_hinges:
-                M = 0
+                x_all.append(nodes[i]+x)
+                V_all.append(round(V,3))
+                M_all.append(round(M,3))
 
-            shear[x] = round(V,3)
-            moment[x] = round(M,3)
-
-        return reactions, shear, moment
+        return {
+            "reactions": reactions,
+            "element_forces": elem_forces,
+            "x": x_all,
+            "shear": V_all,
+            "moment": M_all
+        }
