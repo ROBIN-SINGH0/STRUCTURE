@@ -168,9 +168,9 @@ class Beam:
                 if abs(x)<tol:
                     V_all[i] = R[2*i0]
                     M_all[i] = R[2*i0+1]
-
-        return {
-            "x": x_all,
-            "shear": [round(v,3) for v in V_all],
-            "moment": [round(m,3) for m in M_all]
-        }
+return {
+    "reactions": reactions,
+    "x": x_all,
+    "shear": [round(v,3) for v in V_all],
+    "moment": [round(m,3) for m in M_all]
+}
