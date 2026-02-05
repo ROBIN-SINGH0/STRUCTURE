@@ -62,11 +62,7 @@ class Beam:
     def add_uvl(self, x1, x2, w1, w2):
         self.uvls.append((x1, x2, w1, w2))
 
-    # -----------------------------
-    # SOLVER
-    # -----------------------------
     def solve(self, npts=20):
-
         # ---------- Nodes ----------
         nodes = {0, self.length}
         for x in self.supports: nodes.add(x)
@@ -93,7 +89,7 @@ class Beam:
                 for b in range(4):
                     K[idx[a],idx[b]] += k[a,b]
 
-        # ---------- Internal Hinges ----------
+        # ---------- Internal hinges ----------
         for x in self.internal_hinges:
             i = nodes.index(x)
             r = 2*i + 1
@@ -101,33 +97,26 @@ class Beam:
             K[:,r] = 0
             K[r,r] = 1e-9
 
-        # ---------- Point Loads ----------
+        # ---------- Loads ----------
         for x,P in self.point_loads:
-            i = nodes.index(x)
-            F[2*i] += P
+            F[2*nodes.index(x)] += P
 
-        # ---------- UDL ----------
         for x1,x2,w in self.udls:
             for i in range(n-1):
                 a,b = nodes[i], nodes[i+1]
-                overlap = max(0, min(b,x2)-max(a,x1))
-                if overlap > 0:
-                    fe = elements[i].udl_eq(w*overlap/(b-a))
-                    idx = [2*i,2*i+1,2*i+2,2*i+3]
-                    for j in range(4):
-                        F[idx[j]] += fe[j]
+                ov = max(0, min(b,x2)-max(a,x1))
+                if ov > 0:
+                    fe = elements[i].udl_eq(w*ov/(b-a))
+                    F[2*i:2*i+4] += fe
 
-        # ---------- UVL ----------
         for x1,x2,w1,w2 in self.uvls:
             for i in range(n-1):
                 a,b = nodes[i], nodes[i+1]
-                overlap = max(0, min(b,x2)-max(a,x1))
-                if overlap > 0:
-                    r = overlap/(b-a)
+                ov = max(0, min(b,x2)-max(a,x1))
+                if ov > 0:
+                    r = ov/(b-a)
                     fe = elements[i].uvl_eq(w1*r, w2*r)
-                    idx = [2*i,2*i+1,2*i+2,2*i+3]
-                    for j in range(4):
-                        F[idx[j]] += fe[j]
+                    F[2*i:2*i+4] += fe
 
         # ---------- Supports ----------
         fixed=[]
@@ -146,10 +135,10 @@ class Beam:
         R = K@D - F
         reactions = {x: round(R[2*nodes.index(x)],3) for x in self.supports}
 
-        # ---------- Element End Forces ----------
+        # ---------- Element forces ----------
         elem_forces = []
         for i,el in enumerate(elements):
-            f = el.stiffness() @ D[[2*i,2*i+1,2*i+2,2*i+3]]
+            f = el.stiffness() @ D[2*i:2*i+4]
             elem_forces.append(f)
 
         # ---------- SF & BM at EVERY POINT ----------
@@ -173,7 +162,6 @@ class Beam:
 
         return {
             "reactions": reactions,
-            "element_forces": elem_forces,
             "x": x_all,
             "shear": V_all,
             "moment": M_all
