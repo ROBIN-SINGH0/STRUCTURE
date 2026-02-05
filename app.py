@@ -1,5 +1,4 @@
 import streamlit as st
-import pandas as pd
 import matplotlib.pyplot as plt
 from beam_solver import Beam
 
@@ -46,60 +45,51 @@ with col1:
     L = get_float("📏 Beam Length (m)", "2.0")
 
 with col2:
-    n_sup = get_int("🧱 Number of supports / internal hinges", "1")
+    n_sup = get_int("🧱 Number of supports", "1")
 
 beam = Beam(length=L)
 
 # -------------------------------------------------
 # Supports
 # -------------------------------------------------
-with st.expander("🧱 Supports / Internal Hinges", expanded=True):
+with st.expander("🧱 Supports", expanded=True):
     for i in range(n_sup):
         c1, c2 = st.columns(2)
         with c1:
-            x = get_float(f"Position {i+1} (m)", "0.0")
+            x = get_float(f"Support position {i+1} (m)", "0.0")
         with c2:
             stype = st.selectbox(
-                f"Type {i+1}",
-                ["fixed", "hinge", "roller", "internal_hinge"],
-                key=f"st{i}"
+                f"Support type {i+1}",
+                ["fixed", "hinge", "roller"],
+                key=f"s{i}"
             )
         beam.add_support(x, stype)
 
 # -------------------------------------------------
 # UDL
 # -------------------------------------------------
-with st.expander("📐 Uniformly Distributed Load (UDL)"):
-    n_udl = get_int("Number of UDLs", "1")
-    for i in range(n_udl):
-        c1, c2, c3 = st.columns(3)
-        with c1:
-            w = get_float("Intensity w (N/m)", "-1")
-        with c2:
-            x1 = get_float("Start x (m)", "0.5")
-        with c3:
-            x2 = get_float("End x (m)", "2.0")
-        beam.add_udl(x1, x2, w)
+with st.expander("📐 UDL"):
+    w = get_float("UDL w (N/m) (downward = negative)", "-1")
+    x1 = get_float("Start x (m)", "0.5")
+    x2 = get_float("End x (m)", "2.0")
+    beam.add_udl(x1, x2, w)
 
 # -------------------------------------------------
 # Solve
 # -------------------------------------------------
 if st.button("🚀 Solve Beam", use_container_width=True):
 
-    result = beam.solve(npts=200)  # more points for smooth BM
+    result = beam.solve(npts=300)
 
     x = result["x"]
     V = result["shear"]
     M = result["moment"]
 
-    st.success("Analysis completed successfully")
+    st.success("Analysis completed")
 
-    # -------------------------------------------------
-    # TEXTBOOK-STYLE PLOTS (FIXED)
-    # -------------------------------------------------
     col1, col2 = st.columns(2)
 
-    # -------- SFD (STEP PLOT) --------
+    # ---------------- SFD ----------------
     with col1:
         fig, ax = plt.subplots()
         ax.step(x, V, where="post")
@@ -109,8 +99,9 @@ if st.button("🚀 Solve Beam", use_container_width=True):
         ax.set_ylabel("Shear Force (N)")
         ax.grid(True)
         st.pyplot(fig)
+        plt.close(fig)
 
-    # -------- BMD (SMOOTH CURVE) --------
+    # ---------------- BMD ----------------
     with col2:
         fig, ax = plt.subplots()
         ax.plot(x, M)
@@ -120,3 +111,4 @@ if st.button("🚀 Solve Beam", use_container_width=True):
         ax.set_ylabel("Bending Moment (N·m)")
         ax.grid(True)
         st.pyplot(fig)
+        plt.close(fig)
