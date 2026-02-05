@@ -39,7 +39,7 @@ st.set_page_config(page_title="Beam Solver – FEM", layout="wide")
 
 st.markdown("""
 <h1 style='text-align:center;'>🧱 Beam Solver</h1>
-<h4 style='text-align:center;color:gray;'>Matrix / FEM Method</h4>
+<h4 style='text-align:center;color:gray;'>Matrix / FEM Method (Book Sign Convention)</h4>
 <hr>
 """, unsafe_allow_html=True)
 
@@ -85,7 +85,7 @@ with st.expander("📍 Point Loads"):
         c1, c2 = st.columns(2)
 
         with c1:
-            P = get_float(f"P{i+1} (N) (downward −)", "-1")
+            P = get_float(f"P{i+1} (N)  ↓ downward = NEGATIVE", "-300")
 
         with c2:
             xp = get_float(f"x{i+1} (m)", str(L/2))
@@ -102,7 +102,7 @@ with st.expander("📐 Uniformly Distributed Load (UDL)"):
         c1, c2, c3 = st.columns(3)
 
         with c1:
-            w = get_float(f"w{i+1} (N/m)", "-1")
+            w = get_float(f"w{i+1} (N/m)  ↓ downward = NEGATIVE", "-1")
 
         with c2:
             x1 = get_float(f"Start x{i+1} (m)", "0.0")
@@ -150,18 +150,17 @@ if st.button("🚀 Solve Beam", use_container_width=True):
     st.success("Analysis completed")
 
     # -----------------------------
-    # Reactions
+    # Reactions (Book style)
     # -----------------------------
-    st.markdown("## 🔵 Support Reactions")
+    st.markdown("## 🔵 Support Reactions (Upward +)")
+
     for xs, r in reactions.items():
-        st.write(f"Reaction at x = {xs} m = **{r} N**")
+        st.write(f"Reaction at x = {xs} m = **{abs(r)} N upward**")
 
     # -----------------------------
-    # ALL IMPORTANT POINTS
+    # Important Points
     # -----------------------------
-    key_points = set()
-    key_points.add(0)
-    key_points.add(L)
+    key_points = set([0, L])
 
     for xp,_ in beam.point_loads:
         key_points.add(xp)
@@ -180,30 +179,31 @@ if st.button("🚀 Solve Beam", use_container_width=True):
     key_points = sorted(key_points)
     labels = generate_labels(len(key_points))
 
-    st.markdown("## 📘 Shear Force & Bending Moment Values")
+    st.markdown("## 📘 Shear Force & Bending Moment (BOOK CONVENTION)")
 
     for lbl, xp in zip(labels, key_points):
-        idx = min(
-            range(len(x_coords)),
-            key=lambda i: abs(x_coords[i] - xp)
-        )
+        idx = min(range(len(x_coords)), key=lambda i: abs(x_coords[i] - xp))
+
+        # 🔑 SIGN CONVERSION (BOOK STYLE)
+        SF_book = -V[idx]
+        BM_book = -M[idx]
 
         st.write(
             f"**Point {lbl} (x = {xp} m)** → "
-            f"S.F. = {V[idx]} N , "
-            f"B.M. = {M[idx]} N·m"
+            f"S.F. = {SF_book} N , "
+            f"B.M. = {BM_book} N·m"
         )
 
     # -----------------------------
-    # Diagrams
+    # Diagrams (Book style)
     # -----------------------------
     col1, col2 = st.columns(2)
 
     with col1:
         fig, ax = plt.subplots()
-        ax.step(x_coords, V, where="post")
+        ax.step(x_coords, [-v for v in V], where="post")
         ax.axhline(0)
-        ax.set_title("Shear Force Diagram")
+        ax.set_title("Shear Force Diagram (Book)")
         ax.set_xlabel("Length (m)")
         ax.set_ylabel("Shear Force (N)")
         ax.grid(True)
@@ -212,9 +212,9 @@ if st.button("🚀 Solve Beam", use_container_width=True):
 
     with col2:
         fig, ax = plt.subplots()
-        ax.plot(x_coords, M)
+        ax.plot(x_coords, [-m for m in M])
         ax.axhline(0)
-        ax.set_title("Bending Moment Diagram")
+        ax.set_title("Bending Moment Diagram (Book)")
         ax.set_xlabel("Length (m)")
         ax.set_ylabel("Bending Moment (N·m)")
         ax.grid(True)
