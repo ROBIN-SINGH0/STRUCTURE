@@ -130,68 +130,40 @@ with st.expander("📊 Uniformly Varying Load (UVL)"):
 # -----------------------------
 if st.button("🚀 Solve Beam", use_container_width=True):
 
-    result = beam.solve(npts=300)
+    result = beam.solve(
+        npts=500,
+        smooth_point_load=True,
+        eps_ratio=0.15
+    )
 
-    x = result["x"]          # SIGNED (for graph)
-    V = result["shear"]      # SIGNED
-    M = result["moment"]     # SIGNED
+    x = result["x"]
+    V = result["shear"]
+    M = result["moment"]
     reactions = result["reactions"]
 
     st.success("Analysis completed")
 
     # -----------------------------
-    # Reactions (Magnitude)
+    # Reactions
     # -----------------------------
     st.markdown("## 🔵 Support Reactions (Magnitude)")
     for xs, r in reactions.items():
         st.write(f"Reaction at x = {xs} m = **{abs(r)} N**")
 
     # -----------------------------
-    # Key points
-    # -----------------------------
-    key_points = {0, L}
-
-    for xp,_ in beam.point_loads:
-        key_points.add(xp)
-
-    for x1,x2,_ in beam.udls:
-        key_points.update([x1, x2])
-
-    for x1,x2,_,_ in beam.uvls:
-        key_points.update([x1, x2])
-
-    for xs in beam.supports:
-        key_points.add(xs)
-
-    key_points = sorted(key_points)
-    labels = generate_labels(len(key_points))
-
-    st.markdown("## 📘 Shear Force & Bending Moment (Book Answers)")
-
-    for lbl, xp in zip(labels, key_points):
-        idx = min(range(len(x)), key=lambda i: abs(x[i] - xp))
-
-        st.write(
-            f"**Point {lbl} (x = {xp} m)** → "
-            f"S.F. = {abs(V[idx])} N , "
-            f"B.M. = {abs(M[idx])} N·m"
-        )
-
-    # -----------------------------
-    # Diagrams (SIGNED → CORRECT SHAPE)
+    # Diagrams
     # -----------------------------
     col1, col2 = st.columns(2)
 
     with col1:
         fig, ax = plt.subplots()
-        ax.step(x, V, where="post")
+        ax.plot(x, V)   # ✅ smooth joining
         ax.axhline(0)
         ax.set_title("Shear Force Diagram (Signed)")
         ax.set_xlabel("Length (m)")
         ax.set_ylabel("Shear Force (N)")
         ax.grid(True)
         st.pyplot(fig)
-        plt.close(fig)
 
     with col2:
         fig, ax = plt.subplots()
@@ -202,4 +174,3 @@ if st.button("🚀 Solve Beam", use_container_width=True):
         ax.set_ylabel("Bending Moment (N·m)")
         ax.grid(True)
         st.pyplot(fig)
-        plt.close(fig)
