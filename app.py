@@ -1,9 +1,10 @@
 import streamlit as st
 import matplotlib.pyplot as plt
+import pandas as pd
 from beam_solver import Beam
 
 st.set_page_config("Beam Solver", layout="wide")
-st.title("🧱 Beam Solver (FEM – Full Logic)")
+st.title("🧱 Beam Solver (Full FEM)")
 
 # -----------------------------
 # Beam
@@ -42,7 +43,7 @@ for i in range(n_pl):
 # -----------------------------
 # UDL
 # -----------------------------
-st.subheader("UDL (Uniformly Distributed Load)")
+st.subheader("UDL")
 n_udl = st.number_input("Number of UDLs", min_value=0, step=1)
 
 for i in range(n_udl):
@@ -55,7 +56,7 @@ for i in range(n_udl):
 # -----------------------------
 # UVL
 # -----------------------------
-st.subheader("UVL (Uniformly Varying Load)")
+st.subheader("UVL")
 n_uvl = st.number_input("Number of UVLs", min_value=0, step=1)
 
 for i in range(n_uvl):
@@ -70,6 +71,7 @@ for i in range(n_uvl):
 # Solve
 # -----------------------------
 if st.button("🚀 Solve Beam", use_container_width=True):
+
     res = beam.solve(npts=300)
 
     st.success("Analysis completed")
@@ -79,7 +81,22 @@ if st.button("🚀 Solve Beam", use_container_width=True):
     for x, r in res["reactions"].items():
         st.write(f"x = {x} m → Reaction = **{abs(r)} N**")
 
-    # Plots
+    # -----------------------------
+    # ALL SF & BM VALUES
+    # -----------------------------
+    st.subheader("📊 Shear Force & Bending Moment (Every Point)")
+
+    df = pd.DataFrame({
+        "x (m)": res["x"],
+        "Shear Force (N)": res["shear"],
+        "Bending Moment (N·m)": res["moment"]
+    })
+
+    st.dataframe(df, use_container_width=True)
+
+    # -----------------------------
+    # Diagrams
+    # -----------------------------
     col1, col2 = st.columns(2)
 
     with col1:
@@ -87,8 +104,6 @@ if st.button("🚀 Solve Beam", use_container_width=True):
         ax.plot(res["x"], res["shear"])
         ax.axhline(0)
         ax.set_title("Shear Force Diagram")
-        ax.set_xlabel("Length (m)")
-        ax.set_ylabel("Shear (N)")
         ax.grid(True)
         st.pyplot(fig)
 
@@ -97,7 +112,5 @@ if st.button("🚀 Solve Beam", use_container_width=True):
         ax.plot(res["x"], res["moment"])
         ax.axhline(0)
         ax.set_title("Bending Moment Diagram")
-        ax.set_xlabel("Length (m)")
-        ax.set_ylabel("Moment (N·m)")
         ax.grid(True)
         st.pyplot(fig)
