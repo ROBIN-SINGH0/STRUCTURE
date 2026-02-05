@@ -63,6 +63,7 @@ class Beam:
         self.uvls.append((x1, x2, w1, w2))
 
     def solve(self, npts=20):
+
         # ---------- Nodes ----------
         nodes = {0, self.length}
         for x in self.supports: nodes.add(x)
@@ -85,9 +86,7 @@ class Beam:
         for i,el in enumerate(elements):
             k = el.stiffness()
             idx = [2*i,2*i+1,2*i+2,2*i+3]
-            for a in range(4):
-                for b in range(4):
-                    K[idx[a],idx[b]] += k[a,b]
+            K[np.ix_(idx,idx)] += k
 
         # ---------- Internal hinges ----------
         for x in self.internal_hinges:
@@ -122,8 +121,10 @@ class Beam:
         fixed=[]
         for x,st in self.supports.items():
             i = nodes.index(x)
-            if st=="fixed": fixed += [2*i,2*i+1]
-            elif st in ["hinge","roller"]: fixed += [2*i]
+            if st=="fixed":
+                fixed += [2*i,2*i+1]
+            elif st in ["hinge","roller"]:
+                fixed += [2*i]
 
         free = list(set(range(dof)) - set(fixed))
 
@@ -152,13 +153,21 @@ class Beam:
             V2, M2 =  f[2], -f[3]
 
             for j in range(npts+1):
-                x = j*L/npts
-                V = V1 + (V2-V1)*(x/L)
-                M = M1*(1-x/L) + M2*(x/L) + V1*x*(1-x/L)
+                xloc = j*L/npts
+                V = V1 + (V2-V1)*(xloc/L)
+                M = M1*(1-xloc/L) + M2*(xloc/L) + V1*xloc*(1-xloc/L)
 
-                x_all.append(nodes[i]+x)
+                x_all.append(nodes[i]+xloc)
                 V_all.append(round(V,3))
                 M_all.append(round(M,3))
+
+        # ---------- ONLY NEW PART (OUTPUT CLEANING) ----------
+        # Free end → SF = 0, BM = 0 (textbook rule)
+        tol = 1e-6
+        for i, xv in enumerate(x_all):
+            if xv not in self.supports and abs(xv - 0) > tol and abs(xv - self.length) < tol:
+                V_all[i] = 0.0
+                M_all[i] = 0.0
 
         return {
             "reactions": reactions,
