@@ -147,7 +147,7 @@ if st.button("🚀 Solve Beam", use_container_width=True):
         st.write(f"Reaction at x = {xs} m = **{abs(r)} N**")
 
     # -----------------------------
-    # Key points (Book style)
+    # Key points (SHOW RIGHT SIDE IF POINT LOAD)
     # -----------------------------
     key_points = {0, L}
 
@@ -166,10 +166,20 @@ if st.button("🚀 Solve Beam", use_container_width=True):
     key_points = sorted(key_points)
     labels = generate_labels(len(key_points))
 
-    st.markdown("## 📘 Shear Force & Bending Moment (Book Values)")
+    st.markdown("## 📘 Shear Force & Bending Moment (Right-Side Values)")
+
+    tol = 1e-6
 
     for lbl, xp in zip(labels, key_points):
+
+        # base index near xp
         idx = min(range(len(x)), key=lambda i: abs(x[i] - xp))
+
+        # if point load exists at xp → move to RIGHT side
+        if any(abs(pl_x - xp) < tol for pl_x, _ in beam.point_loads):
+            if idx + 1 < len(x):
+                idx += 1
+
         st.write(
             f"**Point {lbl} (x = {xp} m)** → "
             f"S.F. = {abs(V[idx])} N , "
@@ -185,7 +195,7 @@ if st.button("🚀 Solve Beam", use_container_width=True):
         fig, ax = plt.subplots()
         ax.step(x, V, where="post")
         ax.axhline(0)
-        ax.set_title("Shear Force Diagram")
+        ax.set_title("Shear Force Diagram (Signed)")
         ax.set_xlabel("Length (m)")
         ax.set_ylabel("Shear Force (N)")
         ax.grid(True)
@@ -196,7 +206,7 @@ if st.button("🚀 Solve Beam", use_container_width=True):
         fig, ax = plt.subplots()
         ax.plot(x, M)
         ax.axhline(0)
-        ax.set_title("Bending Moment Diagram")
+        ax.set_title("Bending Moment Diagram (Signed)")
         ax.set_xlabel("Length (m)")
         ax.set_ylabel("Bending Moment (N·m)")
         ax.grid(True)
