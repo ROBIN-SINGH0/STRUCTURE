@@ -142,7 +142,7 @@ class Beam:
             f = el.stiffness() @ D[2*i:2*i+4]
             elem_forces.append(f)
 
-        # ---------- SF & BM at EVERY POINT ----------
+        # ---------- SF & BM ----------
         x_all, V_all, M_all = [], [], []
 
         for i,el in enumerate(elements):
@@ -158,27 +158,29 @@ class Beam:
                 M = M1*(1-xloc/L) + M2*(xloc/L) + V1*xloc*(1-xloc/L)
 
                 x_all.append(nodes[i]+xloc)
-                V_all.append(round(V,3))
-                M_all.append(round(M,3))
-# ---------- IMPROVED FREE-END RULE (FINAL FIX) ----------
-tol = 1e-6
-free_end = self.length
+                V_all.append(V)
+                M_all.append(M)
 
-# find point load at free end (if any)
-P_free = 0.0
-for px, P in self.point_loads:
-    if abs(px - free_end) < tol:
-        P_free += P   # downward load is negative (your convention)
+        # ---------- FREE END FIX (Fig 6.18) ----------
+        tol = 1e-6
+        free_end = self.length
 
-for i, xv in enumerate(x_all):
-    if abs(xv - free_end) < tol and free_end not in self.supports:
-        # bending moment at free end is ALWAYS zero
-        M_all[i] = 0.0
+        P_free = 0.0
+        for px, P in self.point_loads:
+            if abs(px - free_end) < tol:
+                P_free += P
 
-        # shear force rule
-        if abs(P_free) > tol:
-            # point load at free end → shear = load
-            V_all[i] = P_free
-        else:
-            # no load → shear zero
-            V_all[i] = 0.0
+        for i, xv in enumerate(x_all):
+            if abs(xv - free_end) < tol and free_end not in self.supports:
+                M_all[i] = 0.0
+                if abs(P_free) > tol:
+                    V_all[i] = P_free
+                else:
+                    V_all[i] = 0.0
+
+        return {
+            "reactions": reactions,
+            "x": x_all,
+            "shear": [round(v,3) for v in V_all],
+            "moment": [round(m,3) for m in M_all]
+        }
