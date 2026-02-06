@@ -99,14 +99,15 @@ class Beam:
         for x,P in self.point_loads:
             F[2*nodes.index(x)] += P
 
+        # ---------- UDL (FIXED, SAME LOGIC) ----------
         for x1,x2,w in self.udls:
             for i in range(n-1):
-                a,b = nodes[i], nodes[i+1]
-                ov = max(0, min(b,x2)-max(a,x1))
-                if ov > 0:
-                    fe = elements[i].udl_eq(w*ov/(b-a))
+                a, b = nodes[i], nodes[i+1]
+                if a >= x1 and b <= x2:
+                    fe = elements[i].udl_eq(w)
                     F[2*i:2*i+4] += fe
 
+        # ---------- UVL ----------
         for x1,x2,w1,w2 in self.uvls:
             for i in range(n-1):
                 a,b = nodes[i], nodes[i+1]
