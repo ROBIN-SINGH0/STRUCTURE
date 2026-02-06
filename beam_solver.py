@@ -3,9 +3,9 @@ import numpy as np
 class Beam:
     def __init__(self, length):
         self.length = length
-        self.supports = {}          # {x: type}
-        self.point_loads = []       # (x, P)
-        self.udls = []              # (x1, x2, w)
+        self.supports = {}
+        self.point_loads = []
+        self.udls = []
 
     def add_support(self, x, stype):
         self.supports[x] = stype
@@ -17,7 +17,7 @@ class Beam:
         self.udls.append((x1, x2, w))
 
     # -----------------------------
-    # REACTIONS ONLY (IMPROVED, SAME LOGIC)
+    # REACTIONS (FIXED FOR CANTILEVER)
     # -----------------------------
     def solve_reactions(self):
 
@@ -29,12 +29,10 @@ class Beam:
             nodes.append(x)
         for x1, x2, _ in self.udls:
             nodes += [x1, x2]
-
         nodes = sorted(set(nodes))
 
         n = len(nodes)
         dof = 2 * n
-
         K = np.zeros((dof, dof))
         F = np.zeros(dof)
 
@@ -49,10 +47,10 @@ class Beam:
 
         def udl_eq(L, w):
             return np.array([
-                -w * L / 2,
-                -w * L**2 / 12,
-                -w * L / 2,
-                 w * L**2 / 12
+                -w*L/2,
+                -w*L**2/12,
+                -w*L/2,
+                 w*L**2/12
             ])
 
         # ---- assemble K ----
@@ -62,11 +60,10 @@ class Beam:
             idx = [2*i, 2*i+1, 2*i+2, 2*i+3]
             K[np.ix_(idx, idx)] += k
 
-        # ---- point loads ----
+        # ---- loads ----
         for x, P in self.point_loads:
             F[2 * nodes.index(x)] += P
 
-        # ---- UDL ----
         for x1, x2, w in self.udls:
             for i in range(n - 1):
                 if nodes[i] >= x1 and nodes[i + 1] <= x2:
@@ -74,15 +71,15 @@ class Beam:
                     F[2*i:2*i+4] += udl_eq(L, w)
 
         # ---- boundary conditions ----
-        fixed = []
+        fixed_dofs = []
         for x, st in self.supports.items():
             i = nodes.index(x)
             if st == "fixed":
-                fixed += [2*i, 2*i + 1]
-            else:  # hinge / roller
-                fixed += [2*i]
+                fixed_dofs += [2*i, 2*i + 1]   # displacement + rotation
+            else:
+                fixed_dofs += [2*i]            # displacement only
 
-        free = list(set(range(dof)) - set(fixed))
+        free = list(set(range(dof)) - set(fixed_dofs))
 
         # ---- solve ----
         D = np.zeros(dof)
@@ -94,9 +91,15 @@ class Beam:
 
         R = K @ D - F
 
-        # ---- reactions ----
+        # ---- reactions (IMPROVED) ----
         reactions = {}
-        for x in self.supports:
-            reactions[x] = round(R[2 * nodes.index(x)], 3)
+
+        for x, st in self.supports.items():
+            i = nodes.index(x)
+            reactions[x] = {
+                "V": round(R[2*i], 3)
+            }
+            if st == "fixed":
+                reactions[x]["M"] = round(R[2*i + 1], 3)
 
         return reactions
