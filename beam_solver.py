@@ -99,10 +99,10 @@ class Beam:
         for x,P in self.point_loads:
             F[2*nodes.index(x)] += P
 
-        # ---------- UDL (FIXED, SAME LOGIC) ----------
+        # ---------- UDL ----------
         for x1,x2,w in self.udls:
             for i in range(n-1):
-                a, b = nodes[i], nodes[i+1]
+                a,b = nodes[i], nodes[i+1]
                 if a >= x1 and b <= x2:
                     fe = elements[i].udl_eq(w)
                     F[2*i:2*i+4] += fe
@@ -132,35 +132,37 @@ class Beam:
         D = np.zeros(dof)
         D[free] = np.linalg.solve(K[np.ix_(free,free)], F[free])
 
-        # ---------- Reactions ----------
-        R = K@D - F
-        reactions = {x: round(R[2*nodes.index(x)],3) for x in self.supports}
-
         # ---------- Element forces ----------
         elem_forces = []
         for i,el in enumerate(elements):
             f = el.stiffness() @ D[2*i:2*i+4]
             elem_forces.append(f)
 
-        # ---------- SF & BM ----------
+        # ---------- SF & BM (FIXED) ----------
         x_all, V_all, M_all = [], [], []
 
         for i,el in enumerate(elements):
             L = el.L
             f = elem_forces[i]
             V1, M1 = -f[0],  f[1]
-            V2, M2 =  f[2], -f[3]
 
             for j in range(npts+1):
                 xloc = j*L/npts
-                V = V1 + (V2-V1)*(xloc/L)
-                M = M1*(1-xloc/L) + M2*(xloc/L) + V1*xloc*(1-xloc/L)
-                x_all.append(nodes[i]+xloc)
+                xg = nodes[i] + xloc
+
+                w = 0
+                for x1,x2,wl in self.udls:
+                    if x1 <= xg <= x2:
+                        w += wl
+
+                V = V1 - w * xloc
+                M = M1 + V1*xloc - w*xloc**2/2
+
+                x_all.append(xg)
                 V_all.append(V)
                 M_all.append(M)
 
         return {
-            "reactions": reactions,
             "x": x_all,
             "shear": [round(v,3) for v in V_all],
             "moment": [round(m,3) for m in M_all]
