@@ -132,13 +132,17 @@ class Beam:
         D = np.zeros(dof)
         D[free] = np.linalg.solve(K[np.ix_(free,free)], F[free])
 
+        # ---------- Reactions (RESTORED) ----------
+        R = K @ D - F
+        reactions = {x: round(R[2*nodes.index(x)], 3) for x in self.supports}
+
         # ---------- Element forces ----------
         elem_forces = []
         for i,el in enumerate(elements):
             f = el.stiffness() @ D[2*i:2*i+4]
             elem_forces.append(f)
 
-        # ---------- SF & BM (FIXED) ----------
+        # ---------- SF & BM ----------
         x_all, V_all, M_all = [], [], []
 
         for i,el in enumerate(elements):
@@ -155,7 +159,7 @@ class Beam:
                     if x1 <= xg <= x2:
                         w += wl
 
-                V = V1 - w * xloc
+                V = V1 - w*xloc
                 M = M1 + V1*xloc - w*xloc**2/2
 
                 x_all.append(xg)
@@ -163,6 +167,7 @@ class Beam:
                 M_all.append(M)
 
         return {
+            "reactions": reactions,   # ✅ FIXED
             "x": x_all,
             "shear": [round(v,3) for v in V_all],
             "moment": [round(m,3) for m in M_all]
