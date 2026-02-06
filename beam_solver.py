@@ -143,6 +143,7 @@ class Beam:
             elem_forces.append(f)
 
         # ---------- SF & BM (CORRECT for mixed loading) ----------
+        # ---------- IMPROVED SF & BM LOGIC ----------
         x_all, V_all, M_all = [], [], []
         
         for i, el in enumerate(elements):
@@ -154,36 +155,29 @@ class Beam:
             V1 = -f[0]
             M1 =  f[1]
         
-            # element loads
-            w_udl = 0
-            w1 = w2 = 0
+            # UDL intensity on this element
+            w = 0.0
+            for x1, x2, ww in self.udls:
+                if a >= x1 and a + L <= x2:
+                    w += ww
         
-            for x1, x2, w in self.udls:
-                if a >= x1 and a+L <= x2:
-                    w_udl += w
-        
-            for x1, x2, ww1, ww2 in self.uvls:
-                if a >= x1 and a+L <= x2:
-                    w1 += ww1
-                    w2 += ww2
-        
-            for j in range(npts+1):
+            for j in range(npts + 1):
                 xloc = j * L / npts
                 xg = a + xloc
         
-                # shear
-                V = V1 - w_udl * xloc \
-                    - (w1*xloc + (w2-w1)*xloc**2/(2*L))
+                # sum of point loads to the LEFT
+                Psum = sum(P for xp, P in self.point_loads if xp <= xg)
         
-                # moment
-                M = M1 + V1*xloc \
-                    - w_udl*xloc**2/2 \
-                    - (w1*xloc**2/2 + (w2-w1)*xloc**3/(6*L))
+                # shear force
+                V = V1 - w * xloc - Psum
+        
+                # bending moment
+                M = M1 + V1 * xloc - w * xloc**2 / 2 - Psum * xloc
         
                 x_all.append(xg)
                 V_all.append(round(V, 3))
                 M_all.append(round(M, 3))
-        
+
         
                 # ---------- IMPROVED FREE-END RULE ----------
                 tol = 1e-6
