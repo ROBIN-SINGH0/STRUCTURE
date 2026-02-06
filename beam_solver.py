@@ -3,7 +3,7 @@ import numpy as np
 class Beam:
     def __init__(self, length):
         self.length = length
-        self.supports = {}
+        self.supports = {}      # {x: type}
         self.point_loads = []
         self.udls = []
 
@@ -17,7 +17,7 @@ class Beam:
         self.udls.append((x1, x2, w))
 
     # -----------------------------
-    # REACTIONS (FIXED FOR CANTILEVER)
+    # REACTIONS (CORRECT PHYSICS)
     # -----------------------------
     def solve_reactions(self):
 
@@ -29,6 +29,7 @@ class Beam:
             nodes.append(x)
         for x1, x2, _ in self.udls:
             nodes += [x1, x2]
+
         nodes = sorted(set(nodes))
 
         n = len(nodes)
@@ -36,7 +37,7 @@ class Beam:
         K = np.zeros((dof, dof))
         F = np.zeros(dof)
 
-        # ---- local stiffness ----
+        # ---- stiffness ----
         def k_local(L):
             return (1 / L**3) * np.array([
                 [12, 6*L, -12, 6*L],
@@ -53,12 +54,11 @@ class Beam:
                  w*L**2/12
             ])
 
-        # ---- assemble K ----
+        # ---- assemble ----
         for i in range(n - 1):
             L = nodes[i + 1] - nodes[i]
-            k = k_local(L)
             idx = [2*i, 2*i+1, 2*i+2, 2*i+3]
-            K[np.ix_(idx, idx)] += k
+            K[np.ix_(idx, idx)] += k_local(L)
 
         # ---- loads ----
         for x, P in self.point_loads:
@@ -70,14 +70,14 @@ class Beam:
                     L = nodes[i + 1] - nodes[i]
                     F[2*i:2*i+4] += udl_eq(L, w)
 
-        # ---- boundary conditions ----
+        # ---- boundary ----
         fixed_dofs = []
         for x, st in self.supports.items():
             i = nodes.index(x)
             if st == "fixed":
-                fixed_dofs += [2*i, 2*i + 1]   # displacement + rotation
+                fixed_dofs += [2*i, 2*i + 1]
             else:
-                fixed_dofs += [2*i]            # displacement only
+                fixed_dofs += [2*i]
 
         free = list(set(range(dof)) - set(fixed_dofs))
 
@@ -91,14 +91,13 @@ class Beam:
 
         R = K @ D - F
 
-        # ---- reactions (IMPROVED) ----
+        # ---- reactions ONLY AT SUPPORTS ----
         reactions = {}
 
         for x, st in self.supports.items():
             i = nodes.index(x)
-            reactions[x] = {
-                "V": round(R[2*i], 3)
-            }
+            reactions[x] = {"V": round(R[2*i], 3)}
+
             if st == "fixed":
                 reactions[x]["M"] = round(R[2*i + 1], 3)
 
