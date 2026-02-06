@@ -142,24 +142,48 @@ class Beam:
             f = el.stiffness() @ D[2*i:2*i+4]
             elem_forces.append(f)
 
-        # ---------- SF & BM at EVERY POINT ----------
-        x_all, V_all, M_all = [], [], []
+        # ---------- SF & BM (CORRECT for mixed loading) ----------
+x_all, V_all, M_all = [], [], []
 
-        for i,el in enumerate(elements):
-            L = el.L
-            f = elem_forces[i]
+for i, el in enumerate(elements):
+    L = el.L
+    a = nodes[i]
 
-            V1, M1 = -f[0],  f[1]
-            V2, M2 =  f[2], -f[3]
+    # element end forces
+    f = elem_forces[i]
+    V1 = -f[0]
+    M1 =  f[1]
 
-            for j in range(npts+1):
-                xloc = j*L/npts
-                V = V1 + (V2-V1)*(xloc/L)
-                M = M1*(1-xloc/L) + M2*(xloc/L) + V1*xloc*(1-xloc/L)
+    # element loads
+    w_udl = 0
+    w1 = w2 = 0
 
-                x_all.append(nodes[i]+xloc)
-                V_all.append(round(V,3))
-                M_all.append(round(M,3))
+    for x1, x2, w in self.udls:
+        if a >= x1 and a+L <= x2:
+            w_udl += w
+
+    for x1, x2, ww1, ww2 in self.uvls:
+        if a >= x1 and a+L <= x2:
+            w1 += ww1
+            w2 += ww2
+
+    for j in range(npts+1):
+        xloc = j * L / npts
+        xg = a + xloc
+
+        # shear
+        V = V1 - w_udl * xloc \
+            - (w1*xloc + (w2-w1)*xloc**2/(2*L))
+
+        # moment
+        M = M1 + V1*xloc \
+            - w_udl*xloc**2/2 \
+            - (w1*xloc**2/2 + (w2-w1)*xloc**3/(6*L))
+
+        x_all.append(xg)
+        V_all.append(round(V, 3))
+        M_all.append(round(M, 3))
+
 
         # ---------- IMPROVED FREE-END RULE ----------
         tol = 1e-6
