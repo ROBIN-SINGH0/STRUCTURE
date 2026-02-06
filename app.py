@@ -1,8 +1,8 @@
 import streamlit as st
-from beam_reaction_solver import Beam
+from beam_solver import Beam
 
 # -----------------------------
-# Helpers
+# helpers
 # -----------------------------
 def get_float(label, default):
     v = st.text_input(label, default)
@@ -19,21 +19,20 @@ def get_int(label, default):
         return int(default)
 
 # -----------------------------
-# Page
+# page
 # -----------------------------
-st.set_page_config("Beam Reaction Calculator", layout="centered")
-
+st.set_page_config("Beam Reaction App", layout="centered")
 st.title("🧱 Beam Reaction Calculator")
-st.caption("FEM based • Any support • Any loading")
+st.caption("FEM based • reactions only")
 
 # -----------------------------
-# Beam
+# beam
 # -----------------------------
 L = get_float("Beam length (m)", "6")
 beam = Beam(L)
 
 # -----------------------------
-# Supports
+# supports
 # -----------------------------
 st.subheader("Supports")
 n_sup = get_int("Number of supports", "2")
@@ -51,7 +50,7 @@ for i in range(n_sup):
     beam.add_support(x, stype)
 
 # -----------------------------
-# Point Loads
+# point loads
 # -----------------------------
 st.subheader("Point Loads")
 n_pl = get_int("Number of point loads", "0")
@@ -81,7 +80,7 @@ for i in range(n_udl):
     beam.add_udl(x1, x2, w)
 
 # -----------------------------
-# Solve
+# solve
 # -----------------------------
 if st.button("🚀 Calculate Reactions", use_container_width=True):
 
@@ -91,4 +90,4 @@ if st.button("🚀 Calculate Reactions", use_container_width=True):
 
     st.subheader("🔵 Support Reactions")
     for x, r in reactions.items():
-        st.write(f"At x = **{x} m** → **{round(abs(r),3)} N**")
+        st.write(f"At x = **{x} m** → **{abs(r)} N**")
