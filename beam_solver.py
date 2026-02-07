@@ -1,3 +1,4 @@
+import streamlit as st
 import numpy as np
 import matplotlib.pyplot as plt
 
@@ -17,9 +18,6 @@ class Beam:
     def __init__(self, beam=None, supports=None, loads=None, length=None,
                  E=2e11, I=8e-6):
 
-        # -------- ENVIRONMENT SAFE --------
-        # allows: Beam(length=L)
-        # allows: Beam(beam, supports, loads)
         if length is not None:
             self.beam = {"length": length}
             self.supports = supports if supports is not None else []
@@ -66,23 +64,22 @@ class Beam:
             self.elements.append((self.nodes[i], self.nodes[i + 1]))
 
     # -----------------------------
-    # ELEMENT STIFFNESS (Euler–Bernoulli)
+    # ELEMENT STIFFNESS
     # -----------------------------
     def element_stiffness(self, L):
         EI = self.E * self.I
         return (EI / L**3) * np.array([
-            [12,    6*L,   -12,   6*L],
-            [6*L,  4*L**2, -6*L, 2*L**2],
-            [-12,  -6*L,    12,  -6*L],
-            [6*L,  2*L**2, -6*L, 4*L**2]
+            [12, 6*L, -12, 6*L],
+            [6*L, 4*L**2, -6*L, 2*L**2],
+            [-12, -6*L, 12, -6*L],
+            [6*L, 2*L**2, -6*L, 4*L**2]
         ])
 
     # -----------------------------
-    # SOLVE → REACTIONS ONLY (FEM)
+    # FEM → REACTIONS ONLY
     # -----------------------------
     def solve_reactions(self):
 
-        # rebuild in case supports / loads were added later
         self._build_nodes()
         self._build_elements()
         self.node_index = {x: i for i, x in enumerate(self.nodes)}
@@ -93,7 +90,6 @@ class Beam:
         K = np.zeros((dof, dof))
         F = np.zeros(dof)
 
-        # Assemble stiffness
         for x1, x2 in self.elements:
             i = self.node_index[x1]
             j = self.node_index[x2]
@@ -102,15 +98,11 @@ class Beam:
             idx = [2*i, 2*i+1, 2*j, 2*j+1]
             K[np.ix_(idx, idx)] += ke
 
-        # Loads (FEM-consistent)
         for l in self.loads:
-
-            # Point load
             if l["type"] == "point":
                 i = self.node_index[l["pos"]]
                 F[2*i] -= l["value"]
 
-            # UDL
             elif l["type"] == "udl":
                 w = l["value"]
                 for x1, x2 in self.elements:
@@ -120,7 +112,6 @@ class Beam:
                         L = x2 - x1
                         Le = b - a
                         r = Le / L
-
                         i = self.node_index[x1]
                         j = self.node_index[x2]
 
@@ -129,7 +120,6 @@ class Beam:
                         F[2*j]     -= w * L * r / 2
                         F[2*j + 1] += w * L**2 * r / 12
 
-        # Supports
         fixed = []
         for s in self.supports:
             i = self.node_index[s["pos"]]
@@ -140,7 +130,6 @@ class Beam:
 
         free = sorted(set(range(dof)) - set(fixed))
 
-        # Solve
         D = np.zeros(dof)
         D[free] = np.linalg.solve(K[np.ix_(free, free)], F[free])
 
@@ -150,112 +139,49 @@ class Beam:
         for s in self.supports:
             i = self.node_index[s["pos"]]
             r = {"Fy": round(reactions_vec[2*i], 3)}
-            if s["type"] == "fixed":
-                r["M"] = round(reactions_vec[2*i + 1], 3)
-            else:
-                r["M"] = 0.0
-
-            reactions.append({
-                "node": s["pos"],
-                "type": s["type"],
-                "reaction": r
-            })
+            r["M"] = round(reactions_vec[2*i + 1], 3) if s["type"] == "fixed" else 0.0
+            reactions.append({"node": s["pos"], "type": s["type"], "reaction": r})
 
         return reactions
 
+    # ==================================================
+    # METHODS REQUIRED BY STREAMLIT APP
+    # ==================================================
 
-# ==================================================
-# SFD & BMD → PURE STATICS
-# ==================================================
-def compute_sfd_bmd(beam, supports, loads, reactions, n=300):
-    L = beam["length"]
-    x = np.linspace(0, L, n)
+    def add_support(self, x, stype):
+        self.supports.append({"pos": x, "type": stype})
 
-    V = np.zeros(n)
-    M = np.zeros(n)
+    def add_point_load(self, x, P):
+        self.loads.append({"type": "point", "pos": x, "value": P})
 
-    Rf = {r["node"]: r["reaction"]["Fy"] for r in reactions}
-    Rm = {r["node"]: r["reaction"].get("M", 0.0) for r in reactions}
+    def add_udl(self, x1, x2, w):
+        self.loads.append({"type": "udl", "start": x1, "end": x2, "value": w})
 
-    # fixed-end moment offset
-    moment_offset = -Rm.get(0, 0.0)
+    def add_uvl(self, x1, x2, w1, w2):
+        self.loads.append({
+            "type": "uvl",
+            "start": x1,
+            "end": x2,
+            "w1": w1,
+            "w2": w2
+        })
 
-    for i, xi in enumerate(x):
-        shear = 0.0
-        moment = 0.0
+    def solve(self, npts=300):
+        reactions_list = self.solve_reactions()
 
-        # reactions
-        for a, R in Rf.items():
-            if xi >= a:
-                shear += R
-                moment += R * (xi - a)
+        x, V, M = compute_sfd_bmd(
+            self.beam,
+            self.supports,
+            self.loads,
+            reactions_list,
+            n=npts
+        )
 
-        # loads
-        for l in loads:
-            if l["type"] == "point" and xi >= l["pos"]:
-                shear -= l["value"]
-                moment -= l["value"] * (xi - l["pos"])
+        reactions_dict = {r["node"]: r["reaction"]["Fy"] for r in reactions_list}
 
-            elif l["type"] == "udl" and xi >= l["start"]:
-                b = min(xi, l["end"])
-                Ld = b - l["start"]
-                shear -= l["value"] * Ld
-                moment -= l["value"] * Ld * (xi - (l["start"] + b) / 2)
-
-        V[i] = shear
-        M[i] = moment + moment_offset
-
-    return x, V, M
-
-
-# ==================================================
-# PLOT
-# ==================================================
-def plot_diagram(x, y, title, ylabel):
-    y = np.where(np.abs(y) < 1e-6, 0, y)
-
-    plt.figure(figsize=(10, 4))
-    plt.plot(x, y, linewidth=3)
-    plt.axhline(0, color="black")
-    plt.fill_between(x, y, 0, where=y >= 0, alpha=0.3)
-    plt.fill_between(x, y, 0, where=y <= 0, alpha=0.3)
-
-    plt.title(title)
-    plt.xlabel("Beam length (m)")
-    plt.ylabel(ylabel)
-    plt.grid(True, linestyle="--", alpha=0.4)
-    plt.show()
-
-
-# ==================================================
-# EXAMPLE (MATCHES YOUR APP STYLE)
-# ==================================================
-if __name__ == "__main__":
-
-    L = 6
-    beam = Beam(length=L)
-
-    beam.supports = [
-        {"pos": 0, "type": "fixed"}
-    ]
-
-    beam.loads = [
-        {"type": "point", "pos": 4, "value": 10},
-        {"type": "udl", "start": 2, "end": 6, "value": 5}
-    ]
-
-    reactions = beam.solve_reactions()
-
-    print("Reactions:")
-    for r in reactions:
-        print(r)
-
-    x, V, M = compute_sfd_bmd(
-        beam.beam,
-        beam.supports,
-        beam.loads,
-        reactions
-    )
-
-    plot_diagram(x, V, "Shear Force Diagram", "Shear Force")
-    plot_diagram(x, M, "Bending Moment Diagram", "Bending Moment")
+        return {
+            "x": x,
+            "shear": V,
+            "moment": M,
+            "reactions": reactions_dict
+        }
