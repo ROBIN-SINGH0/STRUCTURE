@@ -190,15 +190,18 @@ class Beam:
 
 
         # ---------- FREE END RULE ----------
+              # ---------- FREE END RULE (FIXED) ----------
         tol = 1e-6
         free_end = self.length
+        
         load_at_free_end = any(abs(px - free_end) < tol for px, _ in self.point_loads)
-
+        
         for i, xv in enumerate(x_all):
             if abs(xv - free_end) < tol and free_end not in self.supports:
                 M_all[i] = 0.0
                 if not load_at_free_end:
                     V_all[i] = 0.0
+
 
         return {
             "reactions": reactions,
