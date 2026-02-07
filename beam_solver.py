@@ -153,10 +153,10 @@ class Beam:
         # evaluation points along beam
         x_vals = np.linspace(0, self.length, npts * len(elements))
         
-        for xg in x_vals:
+            for xg in x_vals:
         
-            shear = 0.0
-            moment = 0.0
+                shear = 0.0
+                moment = 0.0
         
             # ---- reactions ----
         for xr, R in reaction_forces.items():
@@ -197,24 +197,24 @@ class Beam:
 
 
 # ---------- FREE END RULE (POST-PROCESS, CORRECT PLACE) ----------
-tol = 1e-6
-free_end = self.length
-load_at_free_end = any(abs(px - free_end) < tol for px, _ in self.point_loads)
-
-for i, xv in enumerate(x_all):
-    if abs(xv - free_end) < tol and free_end not in self.supports:
-        M_all[i] = 0.0
-        if not load_at_free_end:
-            V_all[i] = 0.0
-
-
-# ---------- RETURN (OUTSIDE ALL LOOPS – VERY IMPORTANT) ----------
-return {
-    "reactions": reactions,
-    "x": x_all,
-    "shear": V_all,
-    "moment": M_all
-}
+        tol = 1e-6
+        free_end = self.length
+        load_at_free_end = any(abs(px - free_end) < tol for px, _ in self.point_loads)
+        
+        for i, xv in enumerate(x_all):
+            if abs(xv - free_end) < tol and free_end not in self.supports:
+                M_all[i] = 0.0
+                if not load_at_free_end:
+                    V_all[i] = 0.0
+        
+        
+        # ---------- RETURN (OUTSIDE ALL LOOPS – VERY IMPORTANT) ----------
+        return {
+            "reactions": reactions,
+            "x": x_all,
+            "shear": V_all,
+            "moment": M_all
+        }
 
 
 
