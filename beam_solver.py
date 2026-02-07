@@ -141,48 +141,53 @@ class Beam:
         R = K @ D - F
         reactions = {x: R[2*nodes.index(x)] for x in self.supports}
 
-        # ---------- SF & BM (STATICS BASED) ----------
+      # ---------- SF & BM (STATICS BASED – FRIEND LOGIC) ----------
         x_all, V_all, M_all = [], [], []
-
+        
         reaction_forces = {xr: Rv for xr, Rv in reactions.items()}
         x_vals = np.linspace(0, self.length, npts * len(elements))
-
+        
         for xg in x_vals:
             shear = 0.0
             moment = 0.0
-
+        
+            # ---- reactions (LEFT side) ----
             for xr, Rv in reaction_forces.items():
-                if xg >= xr:
+                if xg > xr:
                     shear += Rv
                     moment += Rv * (xg - xr)
-
+        
+            # ---- point loads (use magnitude) ----
             for xp, P in self.point_loads:
                 if xg > xp:
-                    shear += P
-                    moment += P * (xg - xp)
-
+                    shear -= abs(P)
+                    moment -= abs(P) * (xg - xp)
+        
+            # ---- UDL (use magnitude) ----
             for x1, x2, w in self.udls:
                 if xg > x1:
                     a = x1
                     b = min(xg, x2)
                     if b > a:
                         L = b - a
-                        shear += w * L
-                        moment += w * L * (xg - (a + b) / 2)
-
+                        shear -= abs(w) * L
+                        moment -= abs(w) * L * (xg - (a + b) / 2)
+        
+            # ---- UVL (average magnitude – friend logic) ----
             for x1, x2, w1, w2 in self.uvls:
                 if xg > x1:
                     a = x1
                     b = min(xg, x2)
                     if b > a:
                         L = b - a
-                        w_avg = (w1 + w2) / 2
-                        shear += w_avg * L
-                        moment += w_avg * L * (xg - (a + b) / 2)
-
+                        w_avg = (abs(w1) + abs(w2)) / 2
+                        shear -= w_avg * L
+                        moment -= w_avg * L * (xg - (a + b) / 2)
+        
             x_all.append(round(xg, 6))
             V_all.append(round(shear, 3))
             M_all.append(round(moment, 3))
+
 
         # ---------- FREE END RULE ----------
         tol = 1e-6
