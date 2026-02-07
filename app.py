@@ -66,17 +66,17 @@ if st.button("Solve"):
     # Book-style shear (RIGHT value)
     st.markdown("## 📘 Book-Style Shear Force (Right Value)")
     for l in beam.loads:
-    if l["type"] == "point":
-        V_right = shear_book_right(
-            l["pos"],
-            result["reactions"],
-            beam.loads
-        )
-
-        st.write(
-            f"x = {l['pos']} m → "
-            f"S.F. = {V_right:.2f} N"
-        )
+        if l["type"] == "point":
+            V_right = shear_book_right(
+                l["pos"],
+                result["reactions"],
+                beam.loads
+            )
+    
+            st.write(
+                f"x = {l['pos']} m → "
+                f"S.F. = {V_right:.2f} N"
+            )
 
 
     # Shear Force Diagram
