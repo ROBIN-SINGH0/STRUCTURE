@@ -1,6 +1,6 @@
 import streamlit as st
 import matplotlib.pyplot as plt
-from beam_solver import Beam
+
 
 # -----------------------------
 # Helpers
