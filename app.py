@@ -1,5 +1,4 @@
 import streamlit as st
-import matplotlib.pyplot as plt
 from beam_solver import Beam
 
 
@@ -37,17 +36,17 @@ def generate_labels(n):
 
 
 # -----------------------------
-# SF AT POINT (FRIEND LOGIC)
+# FRIEND LOGIC – RIGHT SIDE
 # -----------------------------
 def sf_at_x(xp, reactions, point_loads, udls, uvls):
     V = 0.0
 
-    for xr, R in reactions.items():
-        if xr > xp:
-            V -= R
+    for r in reactions:
+        if r["node"] > xp:
+            V -= r["reaction"]["Fy"]
 
-    for xl, P in point_loads:
-        if xl > xp:
+    for x, P in point_loads:
+        if x > xp:
             V += abs(P)
 
     for x1, x2, w in udls:
@@ -59,19 +58,16 @@ def sf_at_x(xp, reactions, point_loads, udls, uvls):
     return V
 
 
-# -----------------------------
-# BM AT POINT (FRIEND LOGIC)
-# -----------------------------
 def bm_at_x(xp, reactions, point_loads, udls, uvls):
     M = 0.0
 
-    for xr, R in reactions.items():
-        if xr > xp:
-            M -= R * (xr - xp)
+    for r in reactions:
+        if r["node"] > xp:
+            M -= r["reaction"]["Fy"] * (r["node"] - xp)
 
-    for xl, P in point_loads:
-        if xl > xp:
-            M += abs(P) * (xl - xp)
+    for x, P in point_loads:
+        if x > xp:
+            M += abs(P) * (x - xp)
 
     for x1, x2, w in udls:
         a = max(xp, x1)
@@ -87,14 +83,11 @@ def bm_at_x(xp, reactions, point_loads, udls, uvls):
 def apply_free_end_rule_point(xp, SF, BM, L, point_loads, tol=1e-6):
     if abs(xp - L) < tol:
         BM = 0.0
-
-        load_at_free_end = any(abs(x - L) < tol for x, _ in point_loads)
-
-        if load_at_free_end:
+        load_at_end = any(abs(x - L) < tol for x, _ in point_loads)
+        if load_at_end:
             SF = abs(sum(P for x, P in point_loads if abs(x - L) < tol))
         else:
             SF = 0.0
-
     return SF, BM
 
 
@@ -106,7 +99,7 @@ st.set_page_config(page_title="Beam Solver – FEM", layout="wide")
 st.markdown("""
 <h1 style='text-align:center;'>🧱 Beam Solver</h1>
 <h4 style='text-align:center;color:gray;'>
-Matrix / FEM Method — Consistent Sign Convention
+FEM (Stiffness Matrix) + Friend Logic
 </h4>
 <hr>
 """, unsafe_allow_html=True)
@@ -123,7 +116,15 @@ with col1:
 with col2:
     n_sup = get_int("🧱 Number of supports", "1")
 
-beam = Beam(length=L)
+
+# 🔴 IMPORTANT: data dict (required by Beam solver)
+data = {
+    "beam": {"length": L},
+    "supports": [],
+    "loads": []
+}
+
+beam = Beam(data)
 
 
 # -----------------------------
@@ -137,10 +138,11 @@ with st.expander("🧱 Supports", expanded=True):
         with c2:
             stype = st.selectbox(
                 f"Support type {i+1}",
-                ["fixed", "hinge", "roller", "internal_hinge"],
+                ["fixed", "hinge", "roller"],
                 key=f"s{i}"
             )
-        beam.add_support(xs, stype)
+
+        data["supports"].append({"pos": xs, "type": stype})
 
 
 # -----------------------------
@@ -154,7 +156,12 @@ with st.expander("📍 Point Loads"):
             P = get_float(f"P{i+1} (N)", "-300")
         with c2:
             xp = get_float(f"x{i+1} (m)", str(L / 2))
-        beam.add_point_load(xp, P)
+
+        data["loads"].append({
+            "type": "point",
+            "pos": xp,
+            "value": P
+        })
 
 
 # -----------------------------
@@ -170,25 +177,13 @@ with st.expander("📐 Uniformly Distributed Load (UDL)"):
             x1 = get_float(f"Start x{i+1} (m)", "0.0")
         with c3:
             x2 = get_float(f"End x{i+1} (m)", str(L))
-        beam.add_udl(x1, x2, w)
 
-
-# -----------------------------
-# UVL
-# -----------------------------
-with st.expander("📊 Uniformly Varying Load (UVL)"):
-    n_uvl = get_int("Number of UVLs", "0")
-    for i in range(n_uvl):
-        c1, c2, c3, c4 = st.columns(4)
-        with c1:
-            w1 = get_float(f"w1{i+1}", "0")
-        with c2:
-            w2 = get_float(f"w2{i+1}", "-1")
-        with c3:
-            x1 = get_float(f"Start x{i+1}", "0.0")
-        with c4:
-            x2 = get_float(f"End x{i+1}", str(L))
-        beam.add_uvl(x1, x2, w1, w2)
+        data["loads"].append({
+            "type": "udl",
+            "start": x1,
+            "end": x2,
+            "value": w
+        })
 
 
 # -----------------------------
@@ -196,26 +191,27 @@ with st.expander("📊 Uniformly Varying Load (UVL)"):
 # -----------------------------
 if st.button("🚀 Solve Beam", use_container_width=True):
 
-    result = beam.solve(npts=300)
-    reactions = result["reactions"]
+    beam = Beam(data)
+    reactions = beam.solve()
 
     st.success("Analysis completed")
     st.markdown("## 📘 Shear Force & Bending Moment")
 
-    key_points = sorted({0, L} | set(x for x, _ in beam.point_loads))
+    key_points = sorted({0, L} | set(x for x, _ in [(l["pos"], l["value"]) for l in data["loads"] if l["type"] == "point"]))
     labels = generate_labels(len(key_points))
+
+    # convert loads for friend logic
+    point_loads = [(l["pos"], l["value"]) for l in data["loads"] if l["type"] == "point"]
+    udls = [(l["start"], l["end"], l["value"]) for l in data["loads"] if l["type"] == "udl"]
+    uvls = []
 
     for lbl, xp in zip(labels, key_points):
 
-        SF = sf_at_x(xp, reactions, beam.point_loads, beam.udls, beam.uvls)
-        BM = bm_at_x(xp, reactions, beam.point_loads, beam.udls, beam.uvls)
+        SF = sf_at_x(xp, reactions, point_loads, udls, uvls)
+        BM = bm_at_x(xp, reactions, point_loads, udls, uvls)
 
         SF, BM = apply_free_end_rule_point(
-            xp,
-            SF,
-            BM,
-            L,
-            beam.point_loads
+            xp, SF, BM, L, point_loads
         )
 
         st.write(
