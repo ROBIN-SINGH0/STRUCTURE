@@ -193,7 +193,7 @@ if st.button("🚀 Solve Beam", use_container_width=True):
 
     st.success("Analysis completed")
 
-    st.markdown("## 📘 Shear Force & Bending Moment (Book Answers)")
+    st.markdown("## 📘 Shear Force & Bending Moment")
 
     key_points = sorted({0, L} | set(x for x, _ in beam.point_loads))
 
