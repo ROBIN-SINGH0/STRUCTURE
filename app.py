@@ -30,7 +30,7 @@ def sfd_bmd(L, reactions, loads, n=400):
 # Example
 # ================================
 L = 6.0
-beam = Beam(length=L, n_elem=12)
+beam = Beam(L,12)
 
 beam.add_support(0, "pinned")
 beam.add_support(L, "roller")
