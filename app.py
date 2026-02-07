@@ -35,28 +35,36 @@ def generate_labels(n):
 
 
 # -----------------------------
-# SF AT POINT (FRIEND LOGIC)
 def sf_at_x(xp, reactions, point_loads, udls, uvls):
     V = 0.0
 
-    # reactions on RIGHT
+    # reactions (LEFT or AT section)
     for xr, R in reactions.items():
-        if xr > xp:
-            V -= R
+        if xr <= xp:
+            V += R
 
-    # point loads on RIGHT
+    # point loads (LEFT)
     for xl, P in point_loads:
-        if xl > xp:
-            V += abs(P)
+        if xl <= xp:
+            V += P   # P is already negative if downward
 
-    # UDL on RIGHT
+    # UDL (LEFT)
     for x1, x2, w in udls:
-        a = max(xp, x1)
-        b = x2
+        a = x1
+        b = min(xp, x2)
         if b > a:
-            V += abs(w) * (b - a)
+            V += w * (b - a)
+
+    # UVL (LEFT, average)
+    for x1, x2, w1, w2 in uvls:
+        a = x1
+        b = min(xp, x2)
+        if b > a:
+            w_avg = (w1 + w2) / 2
+            V += w_avg * (b - a)
 
     return V
+
 
 
 
@@ -67,26 +75,37 @@ def sf_at_x(xp, reactions, point_loads, udls, uvls):
 def bm_at_x(xp, reactions, point_loads, udls, uvls):
     M = 0.0
 
-    # reactions on RIGHT
+    # reactions (LEFT or AT section)
     for xr, R in reactions.items():
-        if xr > xp:
-            M -= R * (xr - xp)
+        if xr <= xp:
+            M += R * (xp - xr)
 
-    # point loads on RIGHT
+    # point loads (LEFT)
     for xl, P in point_loads:
-        if xl > xp:
-            M += abs(P) * (xl - xp)
+        if xl <= xp:
+            M += P * (xp - xl)
 
-    # UDL on RIGHT
+    # UDL (LEFT)
     for x1, x2, w in udls:
-        a = max(xp, x1)
-        b = x2
+        a = x1
+        b = min(xp, x2)
         if b > a:
             L = b - a
             xc = (a + b) / 2
-            M += abs(w) * L * (xc - xp)
+            M += w * L * (xp - xc)
+
+    # UVL (LEFT, average)
+    for x1, x2, w1, w2 in uvls:
+        a = x1
+        b = min(xp, x2)
+        if b > a:
+            L = b - a
+            xc = (a + b) / 2
+            w_avg = (w1 + w2) / 2
+            M += w_avg * L * (xp - xc)
 
     return M
+
 
 
 
