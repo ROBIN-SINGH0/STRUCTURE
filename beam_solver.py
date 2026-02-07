@@ -1,153 +1,20 @@
-import streamlit as st
 import numpy as np
-import matplotlib.pyplot as plt
-
-# --------------------------------------------------
-# SIGN CONVENTION
-# +Fy upward
-# +M clockwise
-# Downward loads are negative
-# --------------------------------------------------
-
 
 # ==================================================
 # BEAM CLASS
 # FEM → REACTIONS ONLY
 # ==================================================
 class Beam:
-    def __init__(self, beam=None, supports=None, loads=None, length=None,
-                 E=2e11, I=8e-6):
-
-        if length is not None:
-            self.beam = {"length": length}
-            self.supports = supports if supports is not None else []
-            self.loads = loads if loads is not None else []
-        else:
-            self.beam = beam
-            self.supports = supports
-            self.loads = loads
-
+    def __init__(self, length, E=2e11, I=8e-6):
+        self.beam = {"length": length}
+        self.supports = []
+        self.loads = []
         self.E = E
         self.I = I
 
-        self.nodes = []
-        self.elements = []
-
-        self._build_nodes()
-        self._build_elements()
-        self.node_index = {x: i for i, x in enumerate(self.nodes)}
-
     # -----------------------------
-    # CREATE NODES
+    # INPUT METHODS (for app)
     # -----------------------------
-    def _build_nodes(self):
-        pos = {0, self.beam["length"]}
-
-        for s in self.supports:
-            pos.add(s["pos"])
-
-        for l in self.loads:
-            if l["type"] == "point":
-                pos.add(l["pos"])
-            elif l["type"] == "udl":
-                pos.add(l["start"])
-                pos.add(l["end"])
-
-        self.nodes = sorted(pos)
-
-    # -----------------------------
-    # CREATE ELEMENTS
-    # -----------------------------
-    def _build_elements(self):
-        self.elements = []
-        for i in range(len(self.nodes) - 1):
-            self.elements.append((self.nodes[i], self.nodes[i + 1]))
-
-    # -----------------------------
-    # ELEMENT STIFFNESS
-    # -----------------------------
-    def element_stiffness(self, L):
-        EI = self.E * self.I
-        return (EI / L**3) * np.array([
-            [12, 6*L, -12, 6*L],
-            [6*L, 4*L**2, -6*L, 2*L**2],
-            [-12, -6*L, 12, -6*L],
-            [6*L, 2*L**2, -6*L, 4*L**2]
-        ])
-
-    # -----------------------------
-    # FEM → REACTIONS ONLY
-    # -----------------------------
-    def solve_reactions(self):
-
-        self._build_nodes()
-        self._build_elements()
-        self.node_index = {x: i for i, x in enumerate(self.nodes)}
-
-        n = len(self.nodes)
-        dof = 2 * n
-
-        K = np.zeros((dof, dof))
-        F = np.zeros(dof)
-
-        for x1, x2 in self.elements:
-            i = self.node_index[x1]
-            j = self.node_index[x2]
-            L = x2 - x1
-            ke = self.element_stiffness(L)
-            idx = [2*i, 2*i+1, 2*j, 2*j+1]
-            K[np.ix_(idx, idx)] += ke
-
-        for l in self.loads:
-            if l["type"] == "point":
-                i = self.node_index[l["pos"]]
-                F[2*i] -= l["value"]
-
-            elif l["type"] == "udl":
-                w = l["value"]
-                for x1, x2 in self.elements:
-                    a = max(x1, l["start"])
-                    b = min(x2, l["end"])
-                    if b > a:
-                        L = x2 - x1
-                        Le = b - a
-                        r = Le / L
-                        i = self.node_index[x1]
-                        j = self.node_index[x2]
-
-                        F[2*i]     -= w * L * r / 2
-                        F[2*i + 1] -= w * L**2 * r / 12
-                        F[2*j]     -= w * L * r / 2
-                        F[2*j + 1] += w * L**2 * r / 12
-
-        fixed = []
-        for s in self.supports:
-            i = self.node_index[s["pos"]]
-            if s["type"] == "fixed":
-                fixed += [2*i, 2*i+1]
-            elif s["type"] in ["pinned", "roller"]:
-                fixed.append(2*i)
-
-        free = sorted(set(range(dof)) - set(fixed))
-
-        D = np.zeros(dof)
-        D[free] = np.linalg.solve(K[np.ix_(free, free)], F[free])
-
-        reactions_vec = K @ D - F
-
-        reactions = []
-        for s in self.supports:
-            i = self.node_index[s["pos"]]
-            r = {"Fy": round(reactions_vec[2*i], 3)}
-            r["M"] = round(reactions_vec[2*i + 1], 3) if s["type"] == "fixed" else 0.0
-            reactions.append({"node": s["pos"], "type": s["type"], "reaction": r})
-
-        return reactions
-
-    # ==================================================
-    # METHODS REQUIRED BY STREAMLIT APP
-    # ==================================================
-
     def add_support(self, x, stype):
         self.supports.append({"pos": x, "type": stype})
 
@@ -158,6 +25,7 @@ class Beam:
         self.loads.append({"type": "udl", "start": x1, "end": x2, "value": w})
 
     def add_uvl(self, x1, x2, w1, w2):
+        # stored only (not solved yet)
         self.loads.append({
             "type": "uvl",
             "start": x1,
@@ -166,22 +34,148 @@ class Beam:
             "w2": w2
         })
 
-    def solve(self, npts=300):
-        reactions_list = self.solve_reactions()
+    # -----------------------------
+    # FEM → REACTIONS ONLY
+    # -----------------------------
+    def solve_reactions(self):
 
+        # ---- nodes ----
+        nodes = {0, self.beam["length"]}
+        for s in self.supports:
+            nodes.add(s["pos"])
+        for l in self.loads:
+            if l["type"] == "point":
+                nodes.add(l["pos"])
+            else:
+                nodes.add(l["start"])
+                nodes.add(l["end"])
+
+        nodes = sorted(nodes)
+        idx = {x: i for i, x in enumerate(nodes)}
+
+        # ---- elements ----
+        elements = [(nodes[i], nodes[i+1]) for i in range(len(nodes)-1)]
+
+        n = len(nodes)
+        dof = 2 * n
+        K = np.zeros((dof, dof))
+        F = np.zeros(dof)
+
+        # ---- stiffness ----
+        def ke(L):
+            EI = self.E * self.I
+            return (EI / L**3) * np.array([
+                [12, 6*L, -12, 6*L],
+                [6*L, 4*L**2, -6*L, 2*L**2],
+                [-12, -6*L, 12, -6*L],
+                [6*L, 2*L**2, -6*L, 4*L**2]
+            ])
+
+        for x1, x2 in elements:
+            i, j = idx[x1], idx[x2]
+            L = x2 - x1
+            idof = [2*i,2*i+1,2*j,2*j+1]
+            K[np.ix_(idof,idof)] += ke(L)
+
+        # ---- loads ----
+        for l in self.loads:
+            if l["type"] == "point":
+                F[2*idx[l["pos"]]] -= l["value"]
+
+            elif l["type"] == "udl":
+                w = l["value"]
+                for x1, x2 in elements:
+                    a = max(x1, l["start"])
+                    b = min(x2, l["end"])
+                    if b > a:
+                        Le = b - a
+                        i, j = idx[x1], idx[x2]
+                        F[2*i]     -= w * Le / 2
+                        F[2*i + 1] -= w * Le**2 / 12
+                        F[2*j]     -= w * Le / 2
+                        F[2*j + 1] += w * Le**2 / 12
+
+        # ---- supports ----
+        fixed = []
+        for s in self.supports:
+            i = idx[s["pos"]]
+            if s["type"] == "fixed":
+                fixed += [2*i, 2*i+1]
+            else:
+                fixed.append(2*i)
+
+        free = sorted(set(range(dof)) - set(fixed))
+
+        D = np.zeros(dof)
+        D[free] = np.linalg.solve(K[np.ix_(free, free)], F[free])
+        R = K @ D - F
+
+        reactions = []
+        for s in self.supports:
+            i = idx[s["pos"]]
+            r = {"Fy": R[2*i]}
+            r["M"] = R[2*i+1] if s["type"]=="fixed" else 0.0
+            reactions.append({"node": s["pos"], "reaction": r})
+
+        return reactions
+
+    # -----------------------------
+    # APP SOLVER
+    # -----------------------------
+    def solve(self, npts=300):
+        reactions = self.solve_reactions()
         x, V, M = compute_sfd_bmd(
             self.beam,
-            self.supports,
             self.loads,
-            reactions_list,
+            reactions,
             n=npts
         )
-
-        reactions_dict = {r["node"]: r["reaction"]["Fy"] for r in reactions_list}
 
         return {
             "x": x,
             "shear": V,
             "moment": M,
-            "reactions": reactions_dict
+            "reactions": {
+                r["node"]: r["reaction"]["Fy"]
+                for r in reactions
+            }
         }
+
+
+# ==================================================
+# STATICS → SFD & BMD
+# ==================================================
+def compute_sfd_bmd(beam, loads, reactions, n=300):
+    L = beam["length"]
+    x = np.linspace(0, L, n)
+    V = np.zeros(n)
+    M = np.zeros(n)
+
+    Rf = {r["node"]: r["reaction"]["Fy"] for r in reactions}
+    Rm = {r["node"]: r["reaction"].get("M", 0) for r in reactions}
+    offset = -Rm.get(0, 0)
+
+    for i, xi in enumerate(x):
+        shear = 0
+        moment = 0
+
+        for a, R in Rf.items():
+            if xi >= a:
+                shear += R
+                moment += R * (xi - a)
+
+        for l in loads:
+            if l["type"] == "point" and xi >= l["pos"]:
+                shear -= l["value"]
+                moment -= l["value"] * (xi - l["pos"])
+
+            elif l["type"] == "udl" and xi >= l["start"]:
+                b = min(xi, l["end"])
+                Ld = b - l["start"]
+                shear -= l["value"] * Ld
+                moment -= l["value"] * Ld * (xi - (l["start"] + b)/2)
+
+        V[i] = shear
+        M[i] = moment + offset
+
+    return x, V, M
