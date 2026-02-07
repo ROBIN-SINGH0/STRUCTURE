@@ -1,4 +1,5 @@
 import streamlit as st
+import matplotlib.pyplot as plt
 from beam_solver import Beam
 
 
@@ -12,14 +13,12 @@ def get_float(label, default):
     except:
         return float(default)
 
-
 def get_int(label, default):
     val = st.text_input(label, default)
     try:
         return int(val)
     except:
         return int(default)
-
 
 def generate_labels(n):
     labels = []
@@ -36,19 +35,22 @@ def generate_labels(n):
 
 
 # -----------------------------
-# FRIEND LOGIC – RIGHT SIDE
 # -----------------------------
+# SF AT POINT (FRIEND LOGIC)
 def sf_at_x(xp, reactions, point_loads, udls, uvls):
     V = 0.0
 
-    for r in reactions:
-        if r["node"] > xp:
-            V -= r["reaction"]["Fy"]
+    # reactions on RIGHT
+    for xr, R in reactions.items():
+        if xr > xp:
+            V -= R
 
-    for x, P in point_loads:
-        if x > xp:
+    # point loads on RIGHT
+    for xl, P in point_loads:
+        if xl > xp:
             V += abs(P)
 
+    # UDL on RIGHT
     for x1, x2, w in udls:
         a = max(xp, x1)
         b = x2
@@ -58,17 +60,25 @@ def sf_at_x(xp, reactions, point_loads, udls, uvls):
     return V
 
 
+
+
+
+# -----------------------------
+# BM AT POINT (FRIEND LOGIC)  ✅ KEEP ONLY THIS
 def bm_at_x(xp, reactions, point_loads, udls, uvls):
     M = 0.0
 
-    for r in reactions:
-        if r["node"] > xp:
-            M -= r["reaction"]["Fy"] * (r["node"] - xp)
+    # reactions on RIGHT
+    for xr, R in reactions.items():
+        if xr > xp:
+            M -= R * (xr - xp)
 
-    for x, P in point_loads:
-        if x > xp:
-            M += abs(P) * (x - xp)
+    # point loads on RIGHT
+    for xl, P in point_loads:
+        if xl > xp:
+            M += abs(P) * (xl - xp)
 
+    # UDL on RIGHT
     for x1, x2, w in udls:
         a = max(xp, x1)
         b = x2
@@ -80,15 +90,7 @@ def bm_at_x(xp, reactions, point_loads, udls, uvls):
     return M
 
 
-def apply_free_end_rule_point(xp, SF, BM, L, point_loads, tol=1e-6):
-    if abs(xp - L) < tol:
-        BM = 0.0
-        load_at_end = any(abs(x - L) < tol for x, _ in point_loads)
-        if load_at_end:
-            SF = abs(sum(P for x, P in point_loads if abs(x - L) < tol))
-        else:
-            SF = 0.0
-    return SF, BM
+
 
 
 # -----------------------------
@@ -99,7 +101,7 @@ st.set_page_config(page_title="Beam Solver – FEM", layout="wide")
 st.markdown("""
 <h1 style='text-align:center;'>🧱 Beam Solver</h1>
 <h4 style='text-align:center;color:gray;'>
-FEM (Stiffness Matrix) + Friend Logic
+Matrix / FEM Method — Consistent Sign Convention
 </h4>
 <hr>
 """, unsafe_allow_html=True)
@@ -116,15 +118,7 @@ with col1:
 with col2:
     n_sup = get_int("🧱 Number of supports", "1")
 
-
-# 🔴 IMPORTANT: data dict (required by Beam solver)
-data = {
-    "beam": {"length": L},
-    "supports": [],
-    "loads": []
-}
-
-beam = Beam(data)
+beam = Beam(length=L)
 
 
 # -----------------------------
@@ -138,11 +132,10 @@ with st.expander("🧱 Supports", expanded=True):
         with c2:
             stype = st.selectbox(
                 f"Support type {i+1}",
-                ["fixed", "hinge", "roller"],
+                ["fixed", "hinge", "roller", "internal_hinge"],
                 key=f"s{i}"
             )
-
-        data["supports"].append({"pos": xs, "type": stype})
+        beam.add_support(xs, stype)
 
 
 # -----------------------------
@@ -155,13 +148,8 @@ with st.expander("📍 Point Loads"):
         with c1:
             P = get_float(f"P{i+1} (N)", "-300")
         with c2:
-            xp = get_float(f"x{i+1} (m)", str(L / 2))
-
-        data["loads"].append({
-            "type": "point",
-            "pos": xp,
-            "value": P
-        })
+            xp = get_float(f"x{i+1} (m)", str(L/2))
+        beam.add_point_load(xp, P)
 
 
 # -----------------------------
@@ -177,13 +165,25 @@ with st.expander("📐 Uniformly Distributed Load (UDL)"):
             x1 = get_float(f"Start x{i+1} (m)", "0.0")
         with c3:
             x2 = get_float(f"End x{i+1} (m)", str(L))
+        beam.add_udl(x1, x2, w)
 
-        data["loads"].append({
-            "type": "udl",
-            "start": x1,
-            "end": x2,
-            "value": w
-        })
+
+# -----------------------------
+# UVL
+# -----------------------------
+with st.expander("📊 Uniformly Varying Load (UVL)"):
+    n_uvl = get_int("Number of UVLs", "0")
+    for i in range(n_uvl):
+        c1, c2, c3, c4 = st.columns(4)
+        with c1:
+            w1 = get_float(f"w1{i+1}", "0")
+        with c2:
+            w2 = get_float(f"w2{i+1}", "-1")
+        with c3:
+            x1 = get_float(f"Start x{i+1}", "0.0")
+        with c4:
+            x2 = get_float(f"End x{i+1}", str(L))
+        beam.add_uvl(x1, x2, w1, w2)
 
 
 # -----------------------------
@@ -191,31 +191,23 @@ with st.expander("📐 Uniformly Distributed Load (UDL)"):
 # -----------------------------
 if st.button("🚀 Solve Beam", use_container_width=True):
 
-    beam = Beam(data)
-    reactions = beam.solve()
+    result = beam.solve(npts=300)
+    reactions = result["reactions"]
 
     st.success("Analysis completed")
+
     st.markdown("## 📘 Shear Force & Bending Moment")
 
-    key_points = sorted({0, L} | set(x for x, _ in [(l["pos"], l["value"]) for l in data["loads"] if l["type"] == "point"]))
+    key_points = sorted({0, L} | set(x for x, _ in beam.point_loads))
+
     labels = generate_labels(len(key_points))
 
-    # convert loads for friend logic
-    point_loads = [(l["pos"], l["value"]) for l in data["loads"] if l["type"] == "point"]
-    udls = [(l["start"], l["end"], l["value"]) for l in data["loads"] if l["type"] == "udl"]
-    uvls = []
-
     for lbl, xp in zip(labels, key_points):
-
-        SF = sf_at_x(xp, reactions, point_loads, udls, uvls)
-        BM = bm_at_x(xp, reactions, point_loads, udls, uvls)
-
-        SF, BM = apply_free_end_rule_point(
-            xp, SF, BM, L, point_loads
-        )
+        SF = sf_at_x(xp, reactions, beam.point_loads, beam.udls, beam.uvls)
+        BM = bm_at_x(xp, reactions, beam.point_loads, beam.udls, beam.uvls)
 
         st.write(
             f"**Point {lbl} (x = {xp} m)** → "
             f"S.F. = {abs(round(SF, 3))} N , "
             f"B.M. = {abs(round(BM, 3))} N·m"
-        )
+        ) 
