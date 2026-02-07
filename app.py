@@ -13,12 +13,14 @@ def get_float(label, default):
     except:
         return float(default)
 
+
 def get_int(label, default):
     val = st.text_input(label, default)
     try:
         return int(val)
     except:
         return int(default)
+
 
 def generate_labels(n):
     labels = []
@@ -35,22 +37,19 @@ def generate_labels(n):
 
 
 # -----------------------------
-# -----------------------------
 # SF AT POINT (FRIEND LOGIC)
+# -----------------------------
 def sf_at_x(xp, reactions, point_loads, udls, uvls):
     V = 0.0
 
-    # reactions on RIGHT
     for xr, R in reactions.items():
         if xr > xp:
             V -= R
 
-    # point loads on RIGHT
     for xl, P in point_loads:
         if xl > xp:
             V += abs(P)
 
-    # UDL on RIGHT
     for x1, x2, w in udls:
         a = max(xp, x1)
         b = x2
@@ -60,25 +59,20 @@ def sf_at_x(xp, reactions, point_loads, udls, uvls):
     return V
 
 
-
-
-
 # -----------------------------
-# BM AT POINT (FRIEND LOGIC)  ✅ KEEP ONLY THIS
+# BM AT POINT (FRIEND LOGIC)
+# -----------------------------
 def bm_at_x(xp, reactions, point_loads, udls, uvls):
     M = 0.0
 
-    # reactions on RIGHT
     for xr, R in reactions.items():
         if xr > xp:
             M -= R * (xr - xp)
 
-    # point loads on RIGHT
     for xl, P in point_loads:
         if xl > xp:
             M += abs(P) * (xl - xp)
 
-    # UDL on RIGHT
     for x1, x2, w in udls:
         a = max(xp, x1)
         b = x2
@@ -90,7 +84,18 @@ def bm_at_x(xp, reactions, point_loads, udls, uvls):
     return M
 
 
+def apply_free_end_rule_point(xp, SF, BM, L, point_loads, tol=1e-6):
+    if abs(xp - L) < tol:
+        BM = 0.0
 
+        load_at_free_end = any(abs(x - L) < tol for x, _ in point_loads)
+
+        if load_at_free_end:
+            SF = abs(sum(P for x, P in point_loads if abs(x - L) < tol))
+        else:
+            SF = 0.0
+
+    return SF, BM
 
 
 # -----------------------------
@@ -148,7 +153,7 @@ with st.expander("📍 Point Loads"):
         with c1:
             P = get_float(f"P{i+1} (N)", "-300")
         with c2:
-            xp = get_float(f"x{i+1} (m)", str(L/2))
+            xp = get_float(f"x{i+1} (m)", str(L / 2))
         beam.add_point_load(xp, P)
 
 
@@ -195,16 +200,23 @@ if st.button("🚀 Solve Beam", use_container_width=True):
     reactions = result["reactions"]
 
     st.success("Analysis completed")
-
     st.markdown("## 📘 Shear Force & Bending Moment")
 
     key_points = sorted({0, L} | set(x for x, _ in beam.point_loads))
-
     labels = generate_labels(len(key_points))
 
     for lbl, xp in zip(labels, key_points):
+
         SF = sf_at_x(xp, reactions, beam.point_loads, beam.udls, beam.uvls)
         BM = bm_at_x(xp, reactions, beam.point_loads, beam.udls, beam.uvls)
+
+        SF, BM = apply_free_end_rule_point(
+            xp,
+            SF,
+            BM,
+            L,
+            beam.point_loads
+        )
 
         st.write(
             f"**Point {lbl} (x = {xp} m)** → "
