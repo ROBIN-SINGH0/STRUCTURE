@@ -2,6 +2,7 @@ import streamlit as st
 import matplotlib.pyplot as plt
 from beam_solver import Beam
 
+
 # -----------------------------
 # Helpers
 # -----------------------------
@@ -33,9 +34,9 @@ def generate_labels(n):
     return labels
 
 
-# ======================================================
-# FRIEND LOGIC – RIGHT SIDE
-# ======================================================
+# -----------------------------
+# -----------------------------
+# SF AT POINT (FRIEND LOGIC)
 def sf_at_x(xp, reactions, point_loads, udls, uvls):
     V = 0.0
 
@@ -59,6 +60,11 @@ def sf_at_x(xp, reactions, point_loads, udls, uvls):
     return V
 
 
+
+
+
+# -----------------------------
+# BM AT POINT (FRIEND LOGIC)  ✅ KEEP ONLY THIS
 def bm_at_x(xp, reactions, point_loads, udls, uvls):
     M = 0.0
 
@@ -84,32 +90,18 @@ def bm_at_x(xp, reactions, point_loads, udls, uvls):
     return M
 
 
-# ======================================================
-# FREE END RULE (EXTRA LOGIC)
-# ======================================================
-def apply_free_end_rule_point(xp, SF, BM, L, point_loads, tol=1e-6):
-    if abs(xp - L) < tol:
-        BM = 0.0
-
-        load_at_free_end = any(abs(x - L) < tol for x, _ in point_loads)
-
-        if load_at_free_end:
-            SF = abs(sum(P for x, P in point_loads if abs(x - L) < tol))
-        else:
-            SF = 0.0
-
-    return SF, BM
 
 
-# ======================================================
+
+# -----------------------------
 # Page
-# ======================================================
+# -----------------------------
 st.set_page_config(page_title="Beam Solver – FEM", layout="wide")
 
 st.markdown("""
 <h1 style='text-align:center;'>🧱 Beam Solver</h1>
 <h4 style='text-align:center;color:gray;'>
-Matrix / FEM Method — Friend Logic (Right Side)
+Matrix / FEM Method — Consistent Sign Convention
 </h4>
 <hr>
 """, unsafe_allow_html=True)
@@ -156,7 +148,7 @@ with st.expander("📍 Point Loads"):
         with c1:
             P = get_float(f"P{i+1} (N)", "-300")
         with c2:
-            xp = get_float(f"x{i+1} (m)", str(L))
+            xp = get_float(f"x{i+1} (m)", str(L/2))
         beam.add_point_load(xp, P)
 
 
@@ -207,17 +199,12 @@ if st.button("🚀 Solve Beam", use_container_width=True):
     st.markdown("## 📘 Shear Force & Bending Moment")
 
     key_points = sorted({0, L} | set(x for x, _ in beam.point_loads))
+
     labels = generate_labels(len(key_points))
 
     for lbl, xp in zip(labels, key_points):
-
         SF = sf_at_x(xp, reactions, beam.point_loads, beam.udls, beam.uvls)
         BM = bm_at_x(xp, reactions, beam.point_loads, beam.udls, beam.uvls)
-
-        # ✅ FREE END FIX
-        SF, BM = apply_free_end_rule_point(
-            xp, SF, BM, L, beam.point_loads
-        )
 
         st.write(
             f"**Point {lbl} (x = {xp} m)** → "
