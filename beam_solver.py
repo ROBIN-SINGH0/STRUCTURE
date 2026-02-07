@@ -2,10 +2,10 @@ import numpy as np
 import matplotlib.pyplot as plt
 
 # ======================================================
-# FEM SOLVER (REACTIONS ONLY)
+# FEM SOLVER (REACTIONS ONLY – SAME LOGIC)
 # ======================================================
 
-class Beam:
+class BeamStiffnessSolver:
     def __init__(self, data, E=2e11, I=8e-6):
         self.beam = data["beam"]
         self.supports = data["supports"]
@@ -49,7 +49,7 @@ class Beam:
         K = np.zeros((dof, dof))
         F = np.zeros(dof)
 
-        # stiffness
+        # stiffness assembly
         for e in self.elements:
             i = self.nodes.index(e[0])
             j = self.nodes.index(e[1])
@@ -162,31 +162,7 @@ def compute_sfd_bmd(beam, reactions, loads, n=200):
 
 
 # ======================================================
-# FREE END RULE (EXTRA LOGIC – IMPORTANT)
-# ======================================================
-
-def apply_free_end_rule(x, V, M, beam, loads, tol=1e-6):
-    free_end = beam["length"]
-
-    load_at_free_end = any(
-        l["type"] == "point" and abs(l["pos"] - free_end) < tol
-        for l in loads
-    )
-
-    for i, xi in enumerate(x):
-        if abs(xi - free_end) < tol:
-            M[i] = 0.0
-            if load_at_free_end:
-                V[i] = abs(sum(
-                    l["value"] for l in loads
-                    if l["type"] == "point" and abs(l["pos"] - free_end) < tol
-                ))
-            else:
-                V[i] = 0.0
-
-
-# ======================================================
-# RUN
+# RUN (NO FLASK)
 # ======================================================
 
 if __name__ == "__main__":
@@ -197,12 +173,11 @@ if __name__ == "__main__":
             {"pos": 0.0, "type": "fixed"}
         ],
         "loads": [
-            {"type": "udl", "start": 0.0, "end": 2.0, "value": 2.0},
-            {"type": "point", "pos": 2.0, "value": 3.0}
+            {"type": "point", "pos": 1.0, "value": 300}
         ]
     }
 
-    solver = Beam(data)
+    solver = BeamStiffnessSolver(data)
     reactions = solver.solve()
 
     x, V, M = compute_sfd_bmd(
@@ -211,17 +186,9 @@ if __name__ == "__main__":
         data["loads"]
     )
 
-    apply_free_end_rule(
-        x,
-        V,
-        M,
-        data["beam"],
-        data["loads"]
-    )
-
     print("Reactions:", reactions)
-    print("SF at free end:", V[-1])
-    print("BM at free end:", M[-1])
+    print("SF at mid:", sf_at_x(1.0, reactions, data["loads"]))
+    print("BM at mid:", bm_at_x(1.0, reactions, data["loads"]))
 
     plt.figure(figsize=(10, 4))
     plt.plot(x, V)
@@ -233,4 +200,4 @@ if __name__ == "__main__":
     plt.plot(x, M)
     plt.axhline(0)
     plt.title("Bending Moment Diagram")
-    plt.show()
+    plt.show() tell me where
