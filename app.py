@@ -75,7 +75,7 @@ def sf_at_x(xp, reactions, point_loads, udls, uvls):
 
 
 # -------------BENDING MOMENT----------------
-def bm_at_x(xp, reactions, point_loads, udls, uvls, L):
+def bm_at_x(xp, reactions, point_loads, udls, uvls):
     Mx = 0.0
     tol = 1e-6
 
