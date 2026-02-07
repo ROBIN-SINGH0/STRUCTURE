@@ -2,7 +2,7 @@ import numpy as np
 import matplotlib.pyplot as plt
 
 # ======================================================
-# FEM SOLVER (REACTIONS ONLY – SAME LOGIC)
+# FEM SOLVER (REACTIONS ONLY – FRIEND LOGIC SAFE)
 # ======================================================
 
 class Beam:
@@ -17,6 +17,42 @@ class Beam:
         self._build_nodes()
         self._build_elements()
 
+    # -----------------------------
+    # DATA ADD METHODS (ONLY APPEND)
+    # -----------------------------
+    def add_support(self, x, stype):
+        self.supports.append({
+            "pos": x,
+            "type": stype
+        })
+
+    def add_point_load(self, x, P):
+        self.loads.append({
+            "type": "point",
+            "pos": x,
+            "value": P
+        })
+
+    def add_udl(self, x1, x2, w):
+        self.loads.append({
+            "type": "udl",
+            "start": x1,
+            "end": x2,
+            "value": w
+        })
+
+    def add_uvl(self, x1, x2, w1, w2):
+        self.loads.append({
+            "type": "uvl",
+            "start": x1,
+            "end": x2,
+            "w1": w1,
+            "w2": w2
+        })
+
+    # -----------------------------
+    # NODE / ELEMENT SETUP
+    # -----------------------------
     def _build_nodes(self):
         pos = {0, self.beam["length"]}
         for s in self.supports:
@@ -30,9 +66,13 @@ class Beam:
         self.nodes = sorted(pos)
 
     def _build_elements(self):
+        self.elements = []
         for i in range(len(self.nodes) - 1):
             self.elements.append((self.nodes[i], self.nodes[i + 1]))
 
+    # -----------------------------
+    # STIFFNESS MATRIX
+    # -----------------------------
     def element_stiffness(self, L):
         EI = self.E * self.I
         return (EI / L**3) * np.array([
@@ -42,7 +82,13 @@ class Beam:
             [6*L, 2*L**2, -6*L, 4*L**2]
         ])
 
-    def solve(self):
+    # -----------------------------
+    # SOLVER (REACTIONS ONLY)
+    # -----------------------------
+    def solve(self, npts=200):
+        self._build_nodes()
+        self._build_elements()
+
         n = len(self.nodes)
         dof = 2 * n
 
@@ -96,108 +142,11 @@ class Beam:
 
         reactions = K @ D - F
 
-        results = []
+        reaction_dict = {}
         for s in self.supports:
             i = self.nodes.index(s["pos"])
-            results.append({
-                "node": s["pos"],
-                "reaction": {"Fy": round(reactions[2*i], 3)}
-            })
+            reaction_dict[s["pos"]] = round(reactions[2*i], 3)
 
-        return results
-
-
-# ======================================================
-# FRIEND LOGIC – RIGHT SIDE (SFD & BMD)
-# ======================================================
-
-def sf_at_x(xp, reactions, loads):
-    V = 0.0
-
-    for r in reactions:
-        if r["node"] > xp:
-            V -= r["reaction"]["Fy"]
-
-    for l in loads:
-        if l["type"] == "point" and l["pos"] > xp:
-            V += abs(l["value"])
-
-        elif l["type"] == "udl":
-            a = max(xp, l["start"])
-            b = l["end"]
-            if b > a:
-                V += abs(l["value"]) * (b - a)
-
-    return V
-
-
-def bm_at_x(xp, reactions, loads):
-    M = 0.0
-
-    for r in reactions:
-        if r["node"] > xp:
-            M -= r["reaction"]["Fy"] * (r["node"] - xp)
-
-    for l in loads:
-        if l["type"] == "point" and l["pos"] > xp:
-            M += abs(l["value"]) * (l["pos"] - xp)
-
-        elif l["type"] == "udl":
-            a = max(xp, l["start"])
-            b = l["end"]
-            if b > a:
-                L = b - a
-                xc = (a + b) / 2
-                M += abs(l["value"]) * L * (xc - xp)
-
-    return M
-
-
-def compute_sfd_bmd(beam, reactions, loads, n=200):
-    L = beam["length"]
-    x = np.linspace(0, L, n)
-    V = [sf_at_x(xi, reactions, loads) for xi in x]
-    M = [bm_at_x(xi, reactions, loads) for xi in x]
-    return x, np.array(V), np.array(M)
-
-
-# ======================================================
-# RUN (NO FLASK)
-# ======================================================
-
-if __name__ == "__main__":
-
-    data = {
-        "beam": {"length": 2.0},
-        "supports": [
-            {"pos": 0.0, "type": "fixed"}
-        ],
-        "loads": [
-            {"type": "point", "pos": 1.0, "value": 300}
-        ]
-    }
-
-    solver = Beam(data)
-    reactions = solver.solve()
-
-    x, V, M = compute_sfd_bmd(
-        data["beam"],
-        reactions,
-        data["loads"]
-    )
-
-    print("Reactions:", reactions)
-    print("SF at mid:", sf_at_x(1.0, reactions, data["loads"]))
-    print("BM at mid:", bm_at_x(1.0, reactions, data["loads"]))
-
-    plt.figure(figsize=(10, 4))
-    plt.plot(x, V)
-    plt.axhline(0)
-    plt.title("Shear Force Diagram")
-    plt.show()
-
-    plt.figure(figsize=(10, 4))
-    plt.plot(x, M)
-    plt.axhline(0)
-    plt.title("Bending Moment Diagram")
-    plt.show() 
+        return {
+            "reactions": reaction_dict
+        }
