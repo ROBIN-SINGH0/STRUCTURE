@@ -178,6 +178,7 @@ if st.button("🚀 Solve Beam", use_container_width=True):
             f"B.M. = {abs(M[idx])} N·m"
         )
 
+
     # -----------------------------
     # Diagrams (SIGNED → CORRECT SHAPE)
     # -----------------------------
