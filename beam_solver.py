@@ -159,37 +159,37 @@ class Beam:
             moment = 0.0
         
             # ---- reactions ----
-            for xr, R in reaction_forces.items():
-                if xg >= xr:
-                    shear += R
-                    moment += R * (xg - xr)
+        for xr, R in reaction_forces.items():
+            if xg >= xr:
+                shear += R
+                moment += R * (xg - xr)
         
             # ---- point loads ----
-            for xp, P in self.point_loads:
-                if xg >= xp:
-                    shear += P          # P already negative for downward
-                    moment += P * (xg - xp)
+        for xp, P in self.point_loads:
+            if xg >= xp:
+                shear += P          # P already negative for downward
+                moment += P * (xg - xp)
         
             # ---- UDL ----
-            for x1, x2, w in self.udls:
-                if xg > x1:
-                    a = x1
-                    b = min(xg, x2)
-                    if b > a:
-                        L = b - a
-                        shear += w * L
-                        moment += w * L * (xg - (a + b) / 2)
+        for x1, x2, w in self.udls:
+            if xg > x1:
+                a = x1
+                b = min(xg, x2)
+                if b > a:
+                    L = b - a
+                    shear += w * L
+                    moment += w * L * (xg - (a + b) / 2)
         
             # ---- UVL (average load – friend logic) ----
-            for x1, x2, w1, w2 in self.uvls:
-                if xg > x1:
-                    a = x1
-                    b = min(xg, x2)
-                    if b > a:
-                        L = b - a
-                        w_avg = (w1 + w2) / 2
-                        shear += w_avg * L
-                        moment += w_avg * L * (xg - (a + b) / 2)
+        for x1, x2, w1, w2 in self.uvls:
+            if xg > x1:
+                a = x1
+                b = min(xg, x2)
+                if b > a:
+                    L = b - a
+                    w_avg = (w1 + w2) / 2
+                    shear += w_avg * L
+                    moment += w_avg * L * (xg - (a + b) / 2)
         
             x_all.append(round(xg, 6))
             V_all.append(round(shear, 3))
