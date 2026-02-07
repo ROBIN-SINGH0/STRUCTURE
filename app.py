@@ -1,8 +1,6 @@
 import streamlit as st
-import numpy as np
 import matplotlib.pyplot as plt
-
-from beam_solver import BeamStiffnessSolver, sf_at_x, bm_at_x, compute_sfd_bmd
+from beam_solver import Beam
 
 
 # -----------------------------
@@ -15,14 +13,12 @@ def get_float(label, default):
     except:
         return float(default)
 
-
 def get_int(label, default):
     val = st.text_input(label, default)
     try:
         return int(val)
     except:
         return int(default)
-
 
 def generate_labels(n):
     labels = []
@@ -39,6 +35,65 @@ def generate_labels(n):
 
 
 # -----------------------------
+# -----------------------------
+# SF AT POINT (FRIEND LOGIC)
+def sf_at_x(xp, reactions, point_loads, udls, uvls):
+    V = 0.0
+
+    # reactions on RIGHT
+    for xr, R in reactions.items():
+        if xr > xp:
+            V -= R
+
+    # point loads on RIGHT
+    for xl, P in point_loads:
+        if xl > xp:
+            V += abs(P)
+
+    # UDL on RIGHT
+    for x1, x2, w in udls:
+        a = max(xp, x1)
+        b = x2
+        if b > a:
+            V += abs(w) * (b - a)
+
+    return V
+
+
+
+
+
+# -----------------------------
+# BM AT POINT (FRIEND LOGIC)  ✅ KEEP ONLY THIS
+def bm_at_x(xp, reactions, point_loads, udls, uvls):
+    M = 0.0
+
+    # reactions on RIGHT
+    for xr, R in reactions.items():
+        if xr > xp:
+            M -= R * (xr - xp)
+
+    # point loads on RIGHT
+    for xl, P in point_loads:
+        if xl > xp:
+            M += abs(P) * (xl - xp)
+
+    # UDL on RIGHT
+    for x1, x2, w in udls:
+        a = max(xp, x1)
+        b = x2
+        if b > a:
+            L = b - a
+            xc = (a + b) / 2
+            M += abs(w) * L * (xc - xp)
+
+    return M
+
+
+
+
+
+# -----------------------------
 # Page
 # -----------------------------
 st.set_page_config(page_title="Beam Solver – FEM", layout="wide")
@@ -46,7 +101,7 @@ st.set_page_config(page_title="Beam Solver – FEM", layout="wide")
 st.markdown("""
 <h1 style='text-align:center;'>🧱 Beam Solver</h1>
 <h4 style='text-align:center;color:gray;'>
-FEM Reactions + Friend Right-Side SFD/BMD Logic
+Matrix / FEM Method — Consistent Sign Convention
 </h4>
 <hr>
 """, unsafe_allow_html=True)
@@ -63,9 +118,7 @@ with col1:
 with col2:
     n_sup = get_int("🧱 Number of supports", "1")
 
-
-supports = []
-loads = []
+beam = Beam(length=L)
 
 
 # -----------------------------
@@ -79,14 +132,10 @@ with st.expander("🧱 Supports", expanded=True):
         with c2:
             stype = st.selectbox(
                 f"Support type {i+1}",
-                ["fixed", "hinge", "roller"],
+                ["fixed", "hinge", "roller", "internal_hinge"],
                 key=f"s{i}"
             )
-
-        supports.append({
-            "pos": xs,
-            "type": stype
-        })
+        beam.add_support(xs, stype)
 
 
 # -----------------------------
@@ -99,13 +148,8 @@ with st.expander("📍 Point Loads"):
         with c1:
             P = get_float(f"P{i+1} (N)", "-300")
         with c2:
-            xp = get_float(f"x{i+1} (m)", str(L / 2))
-
-        loads.append({
-            "type": "point",
-            "pos": xp,
-            "value": abs(P)
-        })
+            xp = get_float(f"x{i+1} (m)", str(L/2))
+        beam.add_point_load(xp, P)
 
 
 # -----------------------------
@@ -121,13 +165,25 @@ with st.expander("📐 Uniformly Distributed Load (UDL)"):
             x1 = get_float(f"Start x{i+1} (m)", "0.0")
         with c3:
             x2 = get_float(f"End x{i+1} (m)", str(L))
+        beam.add_udl(x1, x2, w)
 
-        loads.append({
-            "type": "udl",
-            "start": x1,
-            "end": x2,
-            "value": abs(w)
-        })
+
+# -----------------------------
+# UVL
+# -----------------------------
+with st.expander("📊 Uniformly Varying Load (UVL)"):
+    n_uvl = get_int("Number of UVLs", "0")
+    for i in range(n_uvl):
+        c1, c2, c3, c4 = st.columns(4)
+        with c1:
+            w1 = get_float(f"w1{i+1}", "0")
+        with c2:
+            w2 = get_float(f"w2{i+1}", "-1")
+        with c3:
+            x1 = get_float(f"Start x{i+1}", "0.0")
+        with c4:
+            x2 = get_float(f"End x{i+1}", str(L))
+        beam.add_uvl(x1, x2, w1, w2)
 
 
 # -----------------------------
@@ -135,56 +191,23 @@ with st.expander("📐 Uniformly Distributed Load (UDL)"):
 # -----------------------------
 if st.button("🚀 Solve Beam", use_container_width=True):
 
-    data = {
-        "beam": {"length": L},
-        "supports": supports,
-        "loads": loads
-    }
-
-    solver = BeamStiffnessSolver(data)
-    reactions = solver.solve()
+    result = beam.solve(npts=300)
+    reactions = result["reactions"]
 
     st.success("Analysis completed")
 
-    # -----------------------------
-    # SFD & BMD
-    # -----------------------------
-    x, V, M = compute_sfd_bmd(
-        data["beam"],
-        reactions,
-        loads
-    )
-
     st.markdown("## 📘 Shear Force & Bending Moment")
 
-    key_points = sorted(
-        {0, L}
-        | {l["pos"] for l in loads if l["type"] == "point"}
-    )
+    key_points = sorted({0, L} | set(x for x, _ in beam.point_loads))
 
     labels = generate_labels(len(key_points))
 
     for lbl, xp in zip(labels, key_points):
-        SF = sf_at_x(xp, reactions, loads)
-        BM = bm_at_x(xp, reactions, loads)
+        SF = sf_at_x(xp, reactions, beam.point_loads, beam.udls, beam.uvls)
+        BM = bm_at_x(xp, reactions, beam.point_loads, beam.udls, beam.uvls)
 
         st.write(
             f"**Point {lbl} (x = {xp} m)** → "
-            f"S.F. = {round(SF, 3)} N , "
-            f"B.M. = {round(BM, 3)} N·m"
-        )
-
-    # -----------------------------
-    # Plots
-    # -----------------------------
-    fig1, ax1 = plt.subplots()
-    ax1.plot(x, V)
-    ax1.axhline(0)
-    ax1.set_title("Shear Force Diagram")
-    st.pyplot(fig1)
-
-    fig2, ax2 = plt.subplots()
-    ax2.plot(x, M)
-    ax2.axhline(0)
-    ax2.set_title("Bending Moment Diagram")
-    st.pyplot(fig2)
+            f"S.F. = {abs(round(SF, 3))} N , "
+            f"B.M. = {abs(round(BM, 3))} N·m"
+        ) 
