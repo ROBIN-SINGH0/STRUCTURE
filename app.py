@@ -117,8 +117,13 @@ with col1:
 
 with col2:
     n_sup = get_int("🧱 Number of supports", "1")
+data = {
+    "beam": {"length": L},
+    "supports": [],
+    "loads": []
+}
 
-beam = Beam(length=L)
+beam = Beam(data)
 
 
 # -----------------------------
