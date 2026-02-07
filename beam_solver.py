@@ -139,7 +139,7 @@ class Beam:
 
         # ---------- Reactions ----------
         R = K @ D - F
-        reactions = {x: round(R[2*nodes.index(x)], 3) for x in self.supports}
+        reactions = {x: R[2*nodes.index(x)] for x in self.supports}
 
         # ---------- SF & BM (STATICS BASED) ----------
         x_all, V_all, M_all = [], [], []
