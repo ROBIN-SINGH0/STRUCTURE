@@ -2,6 +2,27 @@ import streamlit as st
 import matplotlib.pyplot as plt
 from beam_solver import Beam
 
+def shear_book_right(xp, reactions, loads):
+    V = 0.0
+
+    # reactions
+    for a, R in reactions.items():
+        if a <= xp:
+            V += R
+
+    # loads
+    for l in loads:
+        if l["type"] == "point" and l["pos"] <= xp:
+            V -= l["value"]
+
+        elif l["type"] == "udl":
+            if xp > l["start"]:
+                length = min(xp, l["end"]) - l["start"]
+                if length > 0:
+                    V -= l["value"] * length
+
+    return V
+
 
 def shear_right(x, V, xp, eps=1e-6):
     xr = xp + eps
@@ -45,13 +66,18 @@ if st.button("Solve"):
     # Book-style shear (RIGHT value)
     st.markdown("## 📘 Book-Style Shear Force (Right Value)")
     for l in beam.loads:
-        if l["type"] == "point":
-            V_right = shear_right(
-                result["x"],
-                result["shear"],
-                l["pos"]
-            )
-            st.write(f"x = {l['pos']} m → S.F. = {V_right:.2f} N")
+    if l["type"] == "point":
+        V_right = shear_book_right(
+            l["pos"],
+            result["reactions"],
+            beam.loads
+        )
+
+        st.write(
+            f"x = {l['pos']} m → "
+            f"S.F. = {V_right:.2f} N"
+        )
+
 
     # Shear Force Diagram
     fig, ax = plt.subplots(figsize=(6, 3))
