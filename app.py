@@ -40,28 +40,33 @@ def generate_labels(n):
 def sf_at_x(xp, reactions, point_loads, udls, uvls):
     Vx = 0.0
 
+    # reactions (RIGHT)
     for xr, R in reactions.items():
-        if xp > xr:
+        if xp >= xr:
             Vx += R
 
+    # point loads (RIGHT)
     for xl, P in point_loads:
-        if xp > xl:
-            Vx -= abs(P)
+        if xp >= xl:
+            Vx += P   # P is negative for downward
 
+    # UDL (RIGHT)
     for x1, x2, w in udls:
         if xp > x1:
             L = min(xp, x2) - x1
             if L > 0:
-                Vx -= abs(w) * L
+                Vx += w * L
 
+    # UVL (RIGHT)
     for x1, x2, w1, w2 in uvls:
         if xp > x1:
             L = min(xp, x2) - x1
             if L > 0:
-                w_avg = (abs(w1) + abs(w2)) / 2
-                Vx -= w_avg * L
+                w_avg = (w1 + w2) / 2
+                Vx += w_avg * L
 
     return Vx
+
 
 
 
