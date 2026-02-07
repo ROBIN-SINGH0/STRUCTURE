@@ -151,17 +151,14 @@ if st.button("🚀 Solve Beam", use_container_width=True):
     # -----------------------------
     key_points = {0, L}
 
-    for xp,_ in beam.point_loads:
-        key_points.add(xp)
+    for l in beam.loads:
+        if l["type"] == "point":
+            key_points.add(l["pos"])
+        elif l["type"] == "udl":
+            key_points.update([l["start"], l["end"]])
+        elif l["type"] == "uvl":
+            key_points.update([l["start"], l["end"]])
 
-    for x1,x2,_ in beam.udls:
-        key_points.update([x1, x2])
-
-    for x1,x2,_,_ in beam.uvls:
-        key_points.update([x1, x2])
-
-    for xs in beam.supports:
-        key_points.add(xs)
 
     key_points = sorted(key_points)
     labels = generate_labels(len(key_points))
