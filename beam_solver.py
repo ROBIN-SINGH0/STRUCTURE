@@ -142,41 +142,58 @@ class Beam:
             f = el.stiffness() @ D[2*i:2*i+4]
             elem_forces.append(f)
 
-        # ---------- SF & BM (CORRECT for mixed loading) ----------
-        # ---------- IMPROVED SF & BM LOGIC ----------
+       # ---------- SF & BM (STATICS BASED – FRIEND LOGIC) ----------
         x_all, V_all, M_all = [], [], []
         
-        for i, el in enumerate(elements):
-            L = el.L
-            a = nodes[i]
+        # reactions in usable form
+        reaction_forces = {}
+        for x, r in reactions.items():
+            reaction_forces[x] = r
         
-            # element end forces
-            f = elem_forces[i]
-            V1 = -f[0]
-            M1 =  f[1]
+        x_vals = np.linspace(0, self.length, npts * len(elements))
         
-            # UDL intensity on this element
-            w = 0.0
-            for x1, x2, ww in self.udls:
-                if a >= x1 and a + L <= x2:
-                    w += ww
+        for xg in x_vals:
         
-            for j in range(npts + 1):
-                xloc = j * L / npts
-                xg = a + xloc
+            shear = 0.0
+            moment = 0.0
         
-                # sum of point loads to the LEFT
-                Psum = sum(P for xp, P in self.point_loads if xp <= xg)
+            # ---- reactions ----
+            for xr, R in reaction_forces.items():
+                if xg >= xr:
+                    shear += R
+                    moment += R * (xg - xr)
         
-                # shear force
-                V = V1 - w * xloc - Psum
+            # ---- point loads ----
+            for xp, P in self.point_loads:
+                if xg >= xp:
+                    shear += P
+                    moment += P * (xg - xp)
         
-                # bending moment
-                M = M1 + V1 * xloc - w * xloc**2 / 2 - Psum * xloc
+            # ---- UDL ----
+            for x1, x2, w in self.udls:
+                if xg > x1:
+                    a = x1
+                    b = min(xg, x2)
+                    if b > a:
+                        L = b - a
+                        shear += w * L
+                        moment += w * L * (xg - (a + b)/2)
         
-                x_all.append(xg)
-                V_all.append(round(V, 3))
-                M_all.append(round(M, 3))
+            # ---- UVL ----
+            for x1, x2, w1, w2 in self.uvls:
+                if xg > x1:
+                    a = x1
+                    b = min(xg, x2)
+                    if b > a:
+                        L = b - a
+                        w_avg = (w1 + w2) / 2
+                        shear += w_avg * L
+                        moment += w_avg * L * (xg - (a + b)/2)
+        
+            x_all.append(round(xg, 6))
+            V_all.append(round(shear, 3))
+            M_all.append(round(moment, 3))
+
 
         
                 # ---------- IMPROVED FREE-END RULE ----------
