@@ -200,4 +200,4 @@ if __name__ == "__main__":
     plt.plot(x, M)
     plt.axhline(0)
     plt.title("Bending Moment Diagram")
-    plt.show()    
+    plt.show() 
