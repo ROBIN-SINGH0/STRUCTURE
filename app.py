@@ -170,7 +170,7 @@ if st.button("🚀 Solve Beam", use_container_width=True):
     st.markdown("## 📘 Shear Force & Bending Moment (Book Answers)")
 
     for lbl, xp in zip(labels, key_points):
-        idx = max(i for i in range(len(x)) if x[i] < xp)
+        idx = max([i for i in range(len(x)) if x[i] < xp], default=0)
 
         st.write(
             f"**Point {lbl} (x = {xp} m)** → "
