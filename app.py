@@ -33,6 +33,45 @@ def generate_labels(n):
         labels.append(s)
     return labels
 
+
+# -----------------------------
+# BM AT POINT (FRIEND LOGIC)
+# -----------------------------
+def bm_at_x(xp, reactions, point_loads, udls, uvls):
+    Mx = 0.0
+
+    # reactions
+    for xr, R in reactions.items():
+        if xp > xr:
+            Mx += R * (xp - xr)
+
+    # point loads
+    for xl, P in point_loads:
+        if xp > xl:
+            Mx += P * (xp - xl)
+
+    # UDL
+    for x1, x2, w in udls:
+        if xp > x1:
+            a = x1
+            b = min(xp, x2)
+            if b > a:
+                L = b - a
+                Mx += w * L * (xp - (a + b) / 2)
+
+    # UVL (average – same as friend)
+    for x1, x2, w1, w2 in uvls:
+        if xp > x1:
+            a = x1
+            b = min(xp, x2)
+            if b > a:
+                L = b - a
+                w_avg = (w1 + w2) / 2
+                Mx += w_avg * L * (xp - (a + b) / 2)
+
+    return Mx
+
+
 # -----------------------------
 # Page
 # -----------------------------
@@ -46,6 +85,7 @@ Matrix / FEM Method — Consistent Sign Convention
 <hr>
 """, unsafe_allow_html=True)
 
+
 # -----------------------------
 # Beam input
 # -----------------------------
@@ -58,6 +98,7 @@ with col2:
     n_sup = get_int("🧱 Number of supports", "1")
 
 beam = Beam(length=L)
+
 
 # -----------------------------
 # Supports
@@ -75,6 +116,7 @@ with st.expander("🧱 Supports", expanded=True):
             )
         beam.add_support(xs, stype)
 
+
 # -----------------------------
 # Point Loads
 # -----------------------------
@@ -90,6 +132,7 @@ with st.expander("📍 Point Loads"):
         with c2:
             xp = get_float(f"x{i+1} (m)", str(L/2))
         beam.add_point_load(xp, P)
+
 
 # -----------------------------
 # UDL
@@ -109,6 +152,7 @@ with st.expander("📐 Uniformly Distributed Load (UDL)"):
             x2 = get_float(f"End x{i+1} (m)", str(L))
         beam.add_udl(x1, x2, w)
 
+
 # -----------------------------
 # UVL
 # -----------------------------
@@ -126,6 +170,7 @@ with st.expander("📊 Uniformly Varying Load (UVL)"):
             x2 = get_float(f"End x{i+1} (m)", str(L))
         beam.add_uvl(x1, x2, w1, w2)
 
+
 # -----------------------------
 # Solve
 # -----------------------------
@@ -133,15 +178,15 @@ if st.button("🚀 Solve Beam", use_container_width=True):
 
     result = beam.solve(npts=300)
 
-    x = result["x"]          # SIGNED (for graph)
-    V = result["shear"]      # SIGNED
-    M = result["moment"]     # SIGNED
+    x = result["x"]
+    V = result["shear"]
+    M = result["moment"]
     reactions = result["reactions"]
 
     st.success("Analysis completed")
 
     # -----------------------------
-    # Reactions (Magnitude)
+    # Reactions
     # -----------------------------
     st.markdown("## 🔵 Support Reactions (Magnitude)")
     for xs, r in reactions.items():
@@ -152,13 +197,13 @@ if st.button("🚀 Solve Beam", use_container_width=True):
     # -----------------------------
     key_points = {0, L}
 
-    for xp,_ in beam.point_loads:
+    for xp, _ in beam.point_loads:
         key_points.add(xp)
 
-    for x1,x2,_ in beam.udls:
+    for x1, x2, _ in beam.udls:
         key_points.update([x1, x2])
 
-    for x1,x2,_,_ in beam.uvls:
+    for x1, x2, _, _ in beam.uvls:
         key_points.update([x1, x2])
 
     for xs in beam.supports:
@@ -170,17 +215,27 @@ if st.button("🚀 Solve Beam", use_container_width=True):
     st.markdown("## 📘 Shear Force & Bending Moment (Book Answers)")
 
     for lbl, xp in zip(labels, key_points):
-        idx = max([i for i in range(len(x)) if x[i] < xp], default=0)
+
+        # SF → LEFT side
+        idx_sf = max([i for i in range(len(x)) if x[i] < xp], default=0)
+
+        # BM → direct statics (friend logic)
+        BM_exact = bm_at_x(
+            xp,
+            reactions,
+            beam.point_loads,
+            beam.udls,
+            beam.uvls
+        )
 
         st.write(
             f"**Point {lbl} (x = {xp} m)** → "
-            f"S.F. = {abs(V[idx])} N , "
-            f"B.M. = {abs(M[idx])} N·m"
+            f"S.F. = {abs(V[idx_sf])} N , "
+            f"B.M. = {abs(round(BM_exact, 3))} N·m"
         )
 
-
     # -----------------------------
-    # Diagrams (SIGNED → CORRECT SHAPE)
+    # Diagrams
     # -----------------------------
     col1, col2 = st.columns(2)
 
