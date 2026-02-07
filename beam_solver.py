@@ -5,7 +5,7 @@ import matplotlib.pyplot as plt
 # FEM SOLVER (REACTIONS ONLY – SAME LOGIC)
 # ======================================================
 
-class Beam:
+class BeamStiffnessSolver:
     def __init__(self, data, E=2e11, I=8e-6):
         self.beam = data["beam"]
         self.supports = data["supports"]
@@ -177,7 +177,7 @@ if __name__ == "__main__":
         ]
     }
 
-    solver = Beam(data)
+    solver = BeamStiffnessSolver(data)
     reactions = solver.solve()
 
     x, V, M = compute_sfd_bmd(
@@ -200,4 +200,4 @@ if __name__ == "__main__":
     plt.plot(x, M)
     plt.axhline(0)
     plt.title("Bending Moment Diagram")
-    plt.show()
+    plt.show()    
