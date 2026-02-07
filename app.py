@@ -74,39 +74,41 @@ def sf_at_x(xp, reactions, point_loads, udls, uvls):
 
 
 
-# -----------------------------
-# BM AT POINT (FRIEND LOGIC)  ✅ KEEP ONLY THIS
-def bm_at_x(xp, reactions, point_loads, udls, uvls):
+# -------------BENDING MOMENT----------------
+def bm_at_x(xp, reactions, point_loads, udls, uvls, L):
     Mx = 0.0
+    tol = 1e-6
 
-    # reactions
+    # reactions on right side (exclude same point)
     for xr, R in reactions.items():
-        if xp > xr:
-            Mx += R * (xp - xr)
+        if xp < xr - tol:
+            Mx -= R * (xr - xp)
 
-    # point loads
+    # point loads on right side (include same point)
     for xl, P in point_loads:
-        if xp > xl:
-            Mx -= abs(P) * (xp - xl)
+        if xp <= xl + tol:
+            Mx -= P * (xl - xp)
 
-    # UDL
+    # UDL on right side
     for x1, x2, w in udls:
-        if xp > x1:
-            a = x1
-            b = min(xp, x2)
+        if xp < x2 - tol:
+            a = max(xp, x1)
+            b = x2
             if b > a:
-                L = b - a
-                Mx -= abs(w) * L * (xp - (a + b) / 2)
+                Ld = b - a
+                xc = (a + b) / 2
+                Mx -= w * Ld * (xc - xp)
 
-    # UVL
+    # UVL on right side (average – friend logic)
     for x1, x2, w1, w2 in uvls:
-        if xp > x1:
-            a = x1
-            b = min(xp, x2)
+        if xp < x2 - tol:
+            a = max(xp, x1)
+            b = x2
             if b > a:
-                L = b - a
-                w_avg = (abs(w1) + abs(w2)) / 2
-                Mx -= w_avg * L * (xp - (a + b) / 2)
+                Ld = b - a
+                w_avg = (w1 + w2) / 2
+                xc = (a + b) / 2
+                Mx -= w_avg * Ld * (xc - xp)
 
     return Mx
 
