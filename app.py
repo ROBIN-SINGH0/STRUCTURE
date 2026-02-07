@@ -34,14 +34,20 @@ if st.button("Solve"):
 
     st.write("Reactions:", result["reactions"])
 
-    fig, ax = plt.subplots()
+    fig, ax = plt.subplots(figsize=(6, 3))
     ax.plot(result["x"], result["shear"])
     ax.axhline(0)
     ax.set_title("Shear Force Diagram")
     st.pyplot(fig)
-
-    fig, ax = plt.subplots()
+    plt.close(fig)
+    
+    fig, ax = plt.subplots(figsize=(6, 3))
     ax.plot(result["x"], result["moment"])
     ax.axhline(0)
     ax.set_title("Bending Moment Diagram")
     st.pyplot(fig)
+    plt.close(fig)
+    lt["moment"])
+        ax.axhline(0)
+        ax.set_title("Bending Moment Diagram")
+        st.pyplot(fig)
