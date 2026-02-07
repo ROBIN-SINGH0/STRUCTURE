@@ -37,39 +37,36 @@ def generate_labels(n):
 # -----------------------------
 # SF AT POINT (FRIEND LOGIC)
 # ✅ KEEP ONLY THIS
-def bm_at_x(xp, reactions, point_loads, udls, uvls):
-    Mx = 0.0
+def sf_at_x(xp, reactions, point_loads, udls, uvls):
+    Vx = 0.0
 
     # reactions (LEFT)
     for xr, R in reactions.items():
         if xp > xr:
-            Mx += R * (xp - xr)
+            Vx += R
 
     # point loads (LEFT)
     for xl, P in point_loads:
         if xp > xl:
-            Mx -= abs(P) * (xp - xl)
+            Vx -= abs(P)
 
     # UDL (LEFT)
     for x1, x2, w in udls:
         if xp > x1:
-            a = x1
-            b = min(xp, x2)
-            if b > a:
-                L = b - a
-                Mx -= abs(w) * L * (xp - (a + b) / 2)
+            L = min(xp, x2) - x1
+            if L > 0:
+                Vx -= abs(w) * L
 
     # UVL (LEFT)
     for x1, x2, w1, w2 in uvls:
         if xp > x1:
-            a = x1
-            b = min(xp, x2)
-            if b > a:
-                L = b - a
+            L = min(xp, x2) - x1
+            if L > 0:
                 w_avg = (abs(w1) + abs(w2)) / 2
-                Mx -= w_avg * L * (xp - (a + b) / 2)
+                Vx -= w_avg * L
 
-    return Mx
+    return Vx
+
 
 
 
