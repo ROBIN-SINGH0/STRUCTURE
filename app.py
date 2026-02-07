@@ -214,7 +214,28 @@ if st.button("🚀 Solve Beam", use_container_width=True):
 
     st.markdown("## 📘 Shear Force & Bending Moment (Book Answers)")
 
-    key_points = sorted({0, L} | set(x for x, _ in beam.point_loads))
+    key_points = {0, L}
+
+        # point loads
+        for xp, _ in beam.point_loads:
+            key_points.add(xp)
+        
+        # UDL start & end
+        for x1, x2, _ in beam.udls:
+            key_points.add(x1)
+            key_points.add(x2)
+        
+        # UVL start & end
+        for x1, x2, _, _ in beam.uvls:
+            key_points.add(x1)
+            key_points.add(x2)
+        
+        # supports
+        for xs in beam.supports:
+            key_points.add(xs)
+        
+        key_points = sorted(key_points)
+
 
     labels = generate_labels(len(key_points))
 
