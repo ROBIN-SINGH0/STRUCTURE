@@ -36,35 +36,40 @@ def generate_labels(n):
 
 # -----------------------------
 # SF AT POINT (FRIEND LOGIC)
-def sf_at_x(xp, reactions, point_loads, udls, uvls):
-    Vx = 0.0
+def bm_at_x(xp, reactions, point_loads, udls, uvls, L):
+    M = 0.0
 
-    # reactions
-    for xr, R in reactions.items():
-        if xp > xr:
-            Vx += R
-
-    # point loads
+    # -------- point loads to the RIGHT --------
     for xl, P in point_loads:
-        if xp > xl:
-            Vx -= abs(P)
+        if xl > xp:
+            M += abs(P) * (xl - xp)
 
-    # UDL
+    # -------- UDL to the RIGHT --------
     for x1, x2, w in udls:
-        if xp > x1:
-            L = min(xp, x2) - x1
-            if L > 0:
-                Vx -= abs(w) * L
+        a = max(xp, x1)
+        b = x2
+        if b > a:
+            Lw = b - a
+            xc = (a + b) / 2
+            M += abs(w) * Lw * (xc - xp)
 
-    # UVL
+    # -------- UVL to the RIGHT (average) --------
     for x1, x2, w1, w2 in uvls:
-        if xp > x1:
-            L = min(xp, x2) - x1
-            if L > 0:
-                w_avg = (abs(w1) + abs(w2)) / 2
-                Vx -= w_avg * L
+        a = max(xp, x1)
+        b = x2
+        if b > a:
+            Lw = b - a
+            xc = (a + b) / 2
+            w_avg = (abs(w1) + abs(w2)) / 2
+            M += w_avg * Lw * (xc - xp)
 
-    return Vx
+    # -------- reactions to the RIGHT (SUBTRACT) --------
+    for xr, R in reactions.items():
+        if xr > xp:
+            M -= R * (xr - xp)
+
+    return M
+
 
 
 # -----------------------------
