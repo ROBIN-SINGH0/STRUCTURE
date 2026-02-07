@@ -34,41 +34,39 @@ def generate_labels(n):
     return labels
 
 
-# -----------------------------
+# ------------sf-----------------
 
-# ✅ KEEP ONLY THIS
 def sf_at_x(xp, reactions, point_loads, udls, uvls):
     Vx = 0.0
     tol = 1e-6
 
-    # reactions on right side
+    # reactions (right side)
     for xr, R in reactions.items():
         if xp < xr - tol:
-            Vx -= R   # opposite sign
+            Vx -= R
 
-    # point loads on right side
+    # point loads (right side)
     for xl, P in point_loads:
         if xp <= xl + tol:
             Vx -= P
 
-    # UDL on right side
+    # UDL (split correctly)
     for x1, x2, w in udls:
-        if xp < x2 - tol:
-            a = max(xp, x1)
-            b = x2
-            if b > a:
-                Vx -= w * (b - a)
+        a = max(xp, x1)
+        b = x2
+        if b > a:
+            Vx -= w * (b - a)
 
-    # UVL on right side (average)
+    # UVL (average – same idea)
     for x1, x2, w1, w2 in uvls:
-        if xp < x2 - tol:
-            a = max(xp, x1)
-            b = x2
-            if b > a:
-                w_avg = (w1 + w2) / 2
-                Vx -= w_avg * (b - a)
+        a = max(xp, x1)
+        b = x2
+        if b > a:
+            w_avg = (w1 + w2) / 2
+            Vx -= w_avg * (b - a)
 
     return Vx
+
 
 
 
@@ -79,36 +77,34 @@ def bm_at_x(xp, reactions, point_loads, udls, uvls):
     Mx = 0.0
     tol = 1e-6
 
-    # reactions on right side (exclude same point)
+    # reactions
     for xr, R in reactions.items():
         if xp < xr - tol:
             Mx -= R * (xr - xp)
 
-    # point loads on right side (include same point)
+    # point loads
     for xl, P in point_loads:
         if xp <= xl + tol:
             Mx -= P * (xl - xp)
 
-    # UDL on right side
+    # UDL (split correctly)
     for x1, x2, w in udls:
-        if xp < x2 - tol:
-            a = max(xp, x1)
-            b = x2
-            if b > a:
-                Ld = b - a
-                xc = (a + b) / 2
-                Mx -= w * Ld * (xc - xp)
+        a = max(xp, x1)
+        b = x2
+        if b > a:
+            Ld = b - a
+            xc = (a + b) / 2
+            Mx -= w * Ld * (xc - xp)
 
-    # UVL on right side (average – friend logic)
+    # UVL
     for x1, x2, w1, w2 in uvls:
-        if xp < x2 - tol:
-            a = max(xp, x1)
-            b = x2
-            if b > a:
-                Ld = b - a
-                w_avg = (w1 + w2) / 2
-                xc = (a + b) / 2
-                Mx -= w_avg * Ld * (xc - xp)
+        a = max(xp, x1)
+        b = x2
+        if b > a:
+            Ld = b - a
+            xc = (a + b) / 2
+            w_avg = (w1 + w2) / 2
+            Mx -= w_avg * Ld * (xc - xp)
 
     return Mx
 
