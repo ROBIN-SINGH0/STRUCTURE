@@ -35,21 +35,54 @@ def generate_labels(n):
 
 
 # -----------------------------
+# SF AT POINT (FRIEND LOGIC)
+def sf_at_x(xp, reactions, point_loads, udls, uvls):
+    Vx = 0.0
+
+    # reactions (ADD)
+    for xr, R in reactions.items():
+        if xp > xr:
+            Vx += R
+
+    # point loads (SUBTRACT magnitude)
+    for xl, P in point_loads:
+        if xp > xl:
+            Vx -= abs(P)
+
+    # UDL (SUBTRACT magnitude)
+    for x1, x2, w in udls:
+        if xp > x1:
+            L = min(xp, x2) - x1
+            if L > 0:
+                Vx -= abs(w) * L
+
+    # UVL (average magnitude)
+    for x1, x2, w1, w2 in uvls:
+        if xp > x1:
+            L = min(xp, x2) - x1
+            if L > 0:
+                w_avg = (abs(w1) + abs(w2)) / 2
+                Vx -= w_avg * L
+
+    return Vx
+
+
+# -----------------------------
 # BM AT POINT (FRIEND LOGIC)
 def bm_at_x(xp, reactions, point_loads, udls, uvls):
     Mx = 0.0
 
-    # -------- reactions (ADD) --------
+    # reactions (ADD)
     for xr, R in reactions.items():
         if xp > xr:
             Mx += R * (xp - xr)
 
-    # -------- point loads (SUBTRACT magnitude) --------
+    # point loads (SUBTRACT magnitude)
     for xl, P in point_loads:
         if xp > xl:
             Mx -= abs(P) * (xp - xl)
 
-    # -------- UDL (SUBTRACT magnitude) --------
+    # UDL (SUBTRACT magnitude)
     for x1, x2, w in udls:
         if xp > x1:
             a = x1
@@ -58,7 +91,7 @@ def bm_at_x(xp, reactions, point_loads, udls, uvls):
                 L = b - a
                 Mx -= abs(w) * L * (xp - (a + b) / 2)
 
-    # -------- UVL (SUBTRACT average magnitude) --------
+    # UVL (average magnitude)
     for x1, x2, w1, w2 in uvls:
         if xp > x1:
             a = x1
@@ -215,10 +248,14 @@ if st.button("🚀 Solve Beam", use_container_width=True):
 
     for lbl, xp in zip(labels, key_points):
 
-        # SF → LEFT side
-        idx_sf = max([i for i in range(len(x)) if x[i] < xp], default=0)
+        SF_exact = sf_at_x(
+            xp,
+            reactions,
+            beam.point_loads,
+            beam.udls,
+            beam.uvls
+        )
 
-        # BM → direct statics (friend logic)
         BM_exact = bm_at_x(
             xp,
             reactions,
@@ -229,7 +266,7 @@ if st.button("🚀 Solve Beam", use_container_width=True):
 
         st.write(
             f"**Point {lbl} (x = {xp} m)** → "
-            f"S.F. = {abs(V[idx_sf])} N , "
+            f"S.F. = {abs(round(SF_exact, 3))} N , "
             f"B.M. = {abs(round(BM_exact, 3))} N·m"
         )
 
