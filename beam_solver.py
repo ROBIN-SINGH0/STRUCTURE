@@ -152,12 +152,12 @@ class Beam:
             moment = 0.0
 
             for xr, Rv in reaction_forces.items():
-                if xg >= xr:
+                if xg > xr:
                     shear += Rv
                     moment += Rv * (xg - xr)
 
             for xp, P in self.point_loads:
-                if xg >= xp:
+                if xg > xp:
                     shear += P
                     moment += P * (xg - xp)
 
