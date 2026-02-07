@@ -47,7 +47,4 @@ if st.button("Solve"):
     ax.set_title("Bending Moment Diagram")
     st.pyplot(fig)
     plt.close(fig)
-    lt["moment"])
-        ax.axhline(0)
-        ax.set_title("Bending Moment Diagram")
-        st.pyplot(fig)
+    
