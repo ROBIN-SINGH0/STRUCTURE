@@ -8,18 +8,33 @@ import matplotlib.pyplot as plt
 # Downward loads are negative
 # --------------------------------------------------
 
+
 # ==================================================
-# BEAM CLASS (FEM → REACTIONS ONLY)
+# BEAM CLASS
+# FEM → REACTIONS ONLY
 # ==================================================
 class Beam:
-    def __init__(self, beam, supports, loads, E=2e11, I=8e-6):
-        self.beam = beam
-        self.supports = supports
-        self.loads = loads
+    def __init__(self, beam=None, supports=None, loads=None, length=None,
+                 E=2e11, I=8e-6):
+
+        # -------- ENVIRONMENT SAFE --------
+        # allows: Beam(length=L)
+        # allows: Beam(beam, supports, loads)
+        if length is not None:
+            self.beam = {"length": length}
+            self.supports = supports if supports is not None else []
+            self.loads = loads if loads is not None else []
+        else:
+            self.beam = beam
+            self.supports = supports
+            self.loads = loads
+
         self.E = E
         self.I = I
+
         self.nodes = []
         self.elements = []
+
         self._build_nodes()
         self._build_elements()
         self.node_index = {x: i for i, x in enumerate(self.nodes)}
@@ -46,6 +61,7 @@ class Beam:
     # CREATE ELEMENTS
     # -----------------------------
     def _build_elements(self):
+        self.elements = []
         for i in range(len(self.nodes) - 1):
             self.elements.append((self.nodes[i], self.nodes[i + 1]))
 
@@ -65,13 +81,19 @@ class Beam:
     # SOLVE → REACTIONS ONLY (FEM)
     # -----------------------------
     def solve_reactions(self):
+
+        # rebuild in case supports / loads were added later
+        self._build_nodes()
+        self._build_elements()
+        self.node_index = {x: i for i, x in enumerate(self.nodes)}
+
         n = len(self.nodes)
         dof = 2 * n
 
         K = np.zeros((dof, dof))
         F = np.zeros(dof)
 
-        # Assemble stiffness matrix
+        # Assemble stiffness
         for x1, x2 in self.elements:
             i = self.node_index[x1]
             j = self.node_index[x2]
@@ -80,7 +102,7 @@ class Beam:
             idx = [2*i, 2*i+1, 2*j, 2*j+1]
             K[np.ix_(idx, idx)] += ke
 
-        # Apply loads (FEM-consistent)
+        # Loads (FEM-consistent)
         for l in self.loads:
 
             # Point load
@@ -98,6 +120,7 @@ class Beam:
                         L = x2 - x1
                         Le = b - a
                         r = Le / L
+
                         i = self.node_index[x1]
                         j = self.node_index[x2]
 
@@ -106,7 +129,7 @@ class Beam:
                         F[2*j]     -= w * L * r / 2
                         F[2*j + 1] += w * L**2 * r / 12
 
-        # Apply supports
+        # Supports
         fixed = []
         for s in self.supports:
             i = self.node_index[s["pos"]]
@@ -147,26 +170,27 @@ class Beam:
 def compute_sfd_bmd(beam, supports, loads, reactions, n=300):
     L = beam["length"]
     x = np.linspace(0, L, n)
+
     V = np.zeros(n)
     M = np.zeros(n)
 
-    reaction_forces = {r["node"]: r["reaction"]["Fy"] for r in reactions}
-    reaction_moments = {r["node"]: r["reaction"].get("M", 0.0) for r in reactions}
+    Rf = {r["node"]: r["reaction"]["Fy"] for r in reactions}
+    Rm = {r["node"]: r["reaction"].get("M", 0.0) for r in reactions}
 
-    # Fixed-end moment offset
-    moment_offset = -reaction_moments.get(0, 0.0)
+    # fixed-end moment offset
+    moment_offset = -Rm.get(0, 0.0)
 
     for i, xi in enumerate(x):
         shear = 0.0
         moment = 0.0
 
-        # Reactions
-        for a, R in reaction_forces.items():
+        # reactions
+        for a, R in Rf.items():
             if xi >= a:
                 shear += R
                 moment += R * (xi - a)
 
-        # Loads
+        # loads
         for l in loads:
             if l["type"] == "point" and xi >= l["pos"]:
                 shear -= l["value"]
@@ -185,7 +209,7 @@ def compute_sfd_bmd(beam, supports, loads, reactions, n=300):
 
 
 # ==================================================
-# PLOT DIAGRAMS
+# PLOT
 # ==================================================
 def plot_diagram(x, y, title, ylabel):
     y = np.where(np.abs(y) < 1e-6, 0, y)
@@ -204,29 +228,34 @@ def plot_diagram(x, y, title, ylabel):
 
 
 # ==================================================
-# EXAMPLE USAGE
+# EXAMPLE (MATCHES YOUR APP STYLE)
 # ==================================================
 if __name__ == "__main__":
 
-    beam = {"length": 6}
+    L = 6
+    beam = Beam(length=L)
 
-    supports = [
+    beam.supports = [
         {"pos": 0, "type": "fixed"}
     ]
 
-    loads = [
+    beam.loads = [
         {"type": "point", "pos": 4, "value": 10},
         {"type": "udl", "start": 2, "end": 6, "value": 5}
     ]
 
-    beam_model = Beam(beam, supports, loads)
-    reactions = beam_model.solve_reactions()
+    reactions = beam.solve_reactions()
 
     print("Reactions:")
     for r in reactions:
         print(r)
 
-    x, V, M = compute_sfd_bmd(beam, supports, loads, reactions)
+    x, V, M = compute_sfd_bmd(
+        beam.beam,
+        beam.supports,
+        beam.loads,
+        reactions
+    )
 
     plot_diagram(x, V, "Shear Force Diagram", "Shear Force")
     plot_diagram(x, M, "Bending Moment Diagram", "Bending Moment")
