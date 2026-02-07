@@ -142,14 +142,15 @@ class Beam:
             f = el.stiffness() @ D[2*i:2*i+4]
             elem_forces.append(f)
 
-       # ---------- SF & BM (STATICS BASED – FRIEND LOGIC) ----------
+       # ---------- SF & BM (STATICS BASED – FRIEND LOGIC, FIXED) ----------
         x_all, V_all, M_all = [], [], []
         
         # reactions in usable form
         reaction_forces = {}
-        for x, r in reactions.items():
-            reaction_forces[x] = r
+        for xr, R in reactions.items():
+            reaction_forces[xr] = R
         
+        # evaluation points along beam
         x_vals = np.linspace(0, self.length, npts * len(elements))
         
         for xg in x_vals:
@@ -166,7 +167,7 @@ class Beam:
             # ---- point loads ----
             for xp, P in self.point_loads:
                 if xg >= xp:
-                    shear += P
+                    shear += P          # P already negative for downward
                     moment += P * (xg - xp)
         
             # ---- UDL ----
@@ -177,9 +178,9 @@ class Beam:
                     if b > a:
                         L = b - a
                         shear += w * L
-                        moment += w * L * (xg - (a + b)/2)
+                        moment += w * L * (xg - (a + b) / 2)
         
-            # ---- UVL ----
+            # ---- UVL (average load – friend logic) ----
             for x1, x2, w1, w2 in self.uvls:
                 if xg > x1:
                     a = x1
@@ -188,11 +189,33 @@ class Beam:
                         L = b - a
                         w_avg = (w1 + w2) / 2
                         shear += w_avg * L
-                        moment += w_avg * L * (xg - (a + b)/2)
+                        moment += w_avg * L * (xg - (a + b) / 2)
         
             x_all.append(round(xg, 6))
             V_all.append(round(shear, 3))
             M_all.append(round(moment, 3))
+
+
+# ---------- FREE END RULE (POST-PROCESS, CORRECT PLACE) ----------
+tol = 1e-6
+free_end = self.length
+load_at_free_end = any(abs(px - free_end) < tol for px, _ in self.point_loads)
+
+for i, xv in enumerate(x_all):
+    if abs(xv - free_end) < tol and free_end not in self.supports:
+        M_all[i] = 0.0
+        if not load_at_free_end:
+            V_all[i] = 0.0
+
+
+# ---------- RETURN (OUTSIDE ALL LOOPS – VERY IMPORTANT) ----------
+return {
+    "reactions": reactions,
+    "x": x_all,
+    "shear": V_all,
+    "moment": M_all
+}
+
 
 
         
