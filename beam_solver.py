@@ -138,8 +138,14 @@ class Beam:
         D[free] = np.linalg.solve(K[np.ix_(free, free)], F[free])
 
         # ---------- Reactions ----------
+       # ---------- Reactions ----------
         R = K @ D - F
         reactions = {x: R[2*nodes.index(x)] for x in self.supports}
+        
+        return {
+            "reactions": reactions
+        }
+
 
       # ---------- SF & BM (STATICS BASED – FRIEND LOGIC) ----------
         x_all, V_all, M_all = [], [], []
