@@ -1,185 +1,232 @@
 import numpy as np
+import matplotlib.pyplot as plt
 
-# -----------------------------
-# Beam Element (Euler–Bernoulli)
-# -----------------------------
-class BeamElement:
-    def __init__(self, L):
-        self.L = L
+# --------------------------------------------------
+# SIGN CONVENTION
+# +Fy upward
+# +M clockwise
+# Downward loads are negative
+# --------------------------------------------------
 
-    def stiffness(self):
-        L = self.L
-        return (1 / L**3) * np.array([
-            [12,   6*L,  -12,   6*L],
-            [6*L, 4*L**2, -6*L, 2*L**2],
-            [-12, -6*L,   12,  -6*L],
-            [6*L, 2*L**2, -6*L, 4*L**2]
-        ])
-
-    def udl_eq(self, w):
-        L = self.L
-        return np.array([
-            -w*L/2,
-            -w*L**2/12,
-            -w*L/2,
-             w*L**2/12
-        ])
-
-    def uvl_eq(self, w1, w2):
-        L = self.L
-        return np.array([
-            -(7*w1 + 3*w2)*L/20,
-            -(w1 + 2*w2)*L**2/60,
-            -(3*w1 + 7*w2)*L/20,
-             (2*w1 + w2)*L**2/60
-        ])
-
-
-# -----------------------------
-# Beam Model
-# -----------------------------
+# ==================================================
+# BEAM CLASS (FEM → REACTIONS ONLY)
+# ==================================================
 class Beam:
-    def __init__(self, length):
-        self.length = length
-        self.supports = {}
-        self.internal_hinges = set()
-        self.point_loads = []
-        self.udls = []
-        self.uvls = []
+    def __init__(self, beam, supports, loads, E=2e11, I=8e-6):
+        self.beam = beam
+        self.supports = supports
+        self.loads = loads
+        self.E = E
+        self.I = I
+        self.nodes = []
+        self.elements = []
+        self._build_nodes()
+        self._build_elements()
+        self.node_index = {x: i for i, x in enumerate(self.nodes)}
 
-    def add_support(self, x, stype):
-        if stype == "internal_hinge":
-            self.internal_hinges.add(x)
-        else:
-            self.supports[x] = stype
+    # -----------------------------
+    # CREATE NODES
+    # -----------------------------
+    def _build_nodes(self):
+        pos = {0, self.beam["length"]}
 
-    def add_point_load(self, x, P):
-        self.point_loads.append((x, P))
+        for s in self.supports:
+            pos.add(s["pos"])
 
-    def add_udl(self, x1, x2, w):
-        self.udls.append((x1, x2, w))
+        for l in self.loads:
+            if l["type"] == "point":
+                pos.add(l["pos"])
+            elif l["type"] == "udl":
+                pos.add(l["start"])
+                pos.add(l["end"])
 
-    def add_uvl(self, x1, x2, w1, w2):
-        self.uvls.append((x1, x2, w1, w2))
+        self.nodes = sorted(pos)
 
-    def solve(self, npts=20):
+    # -----------------------------
+    # CREATE ELEMENTS
+    # -----------------------------
+    def _build_elements(self):
+        for i in range(len(self.nodes) - 1):
+            self.elements.append((self.nodes[i], self.nodes[i + 1]))
 
-        # ---------- Nodes ----------
-        nodes = {0, self.length}
-        for x in self.supports: nodes.add(x)
-        for x in self.internal_hinges: nodes.add(x)
-        for x,_ in self.point_loads: nodes.add(x)
-        for x1,x2,_ in self.udls: nodes.update([x1,x2])
-        for x1,x2,_,_ in self.uvls: nodes.update([x1,x2])
+    # -----------------------------
+    # ELEMENT STIFFNESS (Euler–Bernoulli)
+    # -----------------------------
+    def element_stiffness(self, L):
+        EI = self.E * self.I
+        return (EI / L**3) * np.array([
+            [12,    6*L,   -12,   6*L],
+            [6*L,  4*L**2, -6*L, 2*L**2],
+            [-12,  -6*L,    12,  -6*L],
+            [6*L,  2*L**2, -6*L, 4*L**2]
+        ])
 
-        nodes = sorted(nodes)
-        n = len(nodes)
-        dof = 2*n
+    # -----------------------------
+    # SOLVE → REACTIONS ONLY (FEM)
+    # -----------------------------
+    def solve_reactions(self):
+        n = len(self.nodes)
+        dof = 2 * n
 
-        # ---------- Elements ----------
-        elements = [BeamElement(nodes[i+1]-nodes[i]) for i in range(n-1)]
-
-        K = np.zeros((dof,dof))
+        K = np.zeros((dof, dof))
         F = np.zeros(dof)
 
-        # ---------- Stiffness ----------
-        for i,el in enumerate(elements):
-            k = el.stiffness()
-            idx = [2*i,2*i+1,2*i+2,2*i+3]
-            K[np.ix_(idx,idx)] += k
+        # Assemble stiffness matrix
+        for x1, x2 in self.elements:
+            i = self.node_index[x1]
+            j = self.node_index[x2]
+            L = x2 - x1
+            ke = self.element_stiffness(L)
+            idx = [2*i, 2*i+1, 2*j, 2*j+1]
+            K[np.ix_(idx, idx)] += ke
 
-        # ---------- Internal hinges ----------
-        for x in self.internal_hinges:
-            i = nodes.index(x)
-            r = 2*i + 1
-            K[r,:] = 0
-            K[:,r] = 0
-            K[r,r] = 1e-9
+        # Apply loads (FEM-consistent)
+        for l in self.loads:
 
-        # ---------- Loads ----------
-        for x,P in self.point_loads:
-            F[2*nodes.index(x)] += P
+            # Point load
+            if l["type"] == "point":
+                i = self.node_index[l["pos"]]
+                F[2*i] -= l["value"]
 
-        for x1,x2,w in self.udls:
-            for i in range(n-1):
-                a,b = nodes[i], nodes[i+1]
-                ov = max(0, min(b,x2)-max(a,x1))
-                if ov > 0:
-                    fe = elements[i].udl_eq(w*ov/(b-a))
-                    F[2*i:2*i+4] += fe
+            # UDL
+            elif l["type"] == "udl":
+                w = l["value"]
+                for x1, x2 in self.elements:
+                    a = max(x1, l["start"])
+                    b = min(x2, l["end"])
+                    if b > a:
+                        L = x2 - x1
+                        Le = b - a
+                        r = Le / L
+                        i = self.node_index[x1]
+                        j = self.node_index[x2]
 
-        for x1,x2,w1,w2 in self.uvls:
-            for i in range(n-1):
-                a,b = nodes[i], nodes[i+1]
-                ov = max(0, min(b,x2)-max(a,x1))
-                if ov > 0:
-                    r = ov/(b-a)
-                    fe = elements[i].uvl_eq(w1*r, w2*r)
-                    F[2*i:2*i+4] += fe
+                        F[2*i]     -= w * L * r / 2
+                        F[2*i + 1] -= w * L**2 * r / 12
+                        F[2*j]     -= w * L * r / 2
+                        F[2*j + 1] += w * L**2 * r / 12
 
-        # ---------- Supports ----------
-        fixed=[]
-        for x,st in self.supports.items():
-            i = nodes.index(x)
-            if st=="fixed":
-                fixed += [2*i,2*i+1]
-            elif st in ["hinge","roller"]:
-                fixed += [2*i]
+        # Apply supports
+        fixed = []
+        for s in self.supports:
+            i = self.node_index[s["pos"]]
+            if s["type"] == "fixed":
+                fixed += [2*i, 2*i+1]
+            elif s["type"] in ["pinned", "roller"]:
+                fixed.append(2*i)
 
-        free = list(set(range(dof)) - set(fixed))
+        free = sorted(set(range(dof)) - set(fixed))
 
-        # ---------- Solve ----------
+        # Solve
         D = np.zeros(dof)
-        D[free] = np.linalg.solve(K[np.ix_(free,free)], F[free])
+        D[free] = np.linalg.solve(K[np.ix_(free, free)], F[free])
 
-        # ---------- Reactions ----------
-        R = K@D - F
-        reactions = {x: round(R[2*nodes.index(x)],3) for x in self.supports}
+        reactions_vec = K @ D - F
 
-        # ---------- Element forces ----------
-        elem_forces = []
-        for i,el in enumerate(elements):
-            f = el.stiffness() @ D[2*i:2*i+4]
-            elem_forces.append(f)
+        reactions = []
+        for s in self.supports:
+            i = self.node_index[s["pos"]]
+            r = {"Fy": round(reactions_vec[2*i], 3)}
+            if s["type"] == "fixed":
+                r["M"] = round(reactions_vec[2*i + 1], 3)
+            else:
+                r["M"] = 0.0
 
-        # ---------- SF & BM at EVERY POINT ----------
-        x_all, V_all, M_all = [], [], []
+            reactions.append({
+                "node": s["pos"],
+                "type": s["type"],
+                "reaction": r
+            })
 
-        for i,el in enumerate(elements):
-            L = el.L
-            f = elem_forces[i]
+        return reactions
 
-            V1, M1 = -f[0],  f[1]
-            V2, M2 =  f[2], -f[3]
 
-            for j in range(npts+1):
-                xloc = j*L/npts
-                V = V1 + (V2-V1)*(xloc/L)
-                M = M1*(1-xloc/L) + M2*(xloc/L) + V1*xloc*(1-xloc/L)
+# ==================================================
+# SFD & BMD → PURE STATICS
+# ==================================================
+def compute_sfd_bmd(beam, supports, loads, reactions, n=300):
+    L = beam["length"]
+    x = np.linspace(0, L, n)
+    V = np.zeros(n)
+    M = np.zeros(n)
 
-                x_all.append(nodes[i]+xloc)
-                V_all.append(round(V,3))
-                M_all.append(round(M,3))
+    reaction_forces = {r["node"]: r["reaction"]["Fy"] for r in reactions}
+    reaction_moments = {r["node"]: r["reaction"].get("M", 0.0) for r in reactions}
 
-        # ---------- IMPROVED FREE-END RULE ----------
-        tol = 1e-6
-        free_end = self.length
+    # Fixed-end moment offset
+    moment_offset = -reaction_moments.get(0, 0.0)
 
-        # check if point load exists at free end
-        load_at_free_end = any(abs(px - free_end) < tol for px,_ in self.point_loads)
+    for i, xi in enumerate(x):
+        shear = 0.0
+        moment = 0.0
 
-        for i, xv in enumerate(x_all):
-            if abs(xv - free_end) < tol and free_end not in self.supports:
-                # BM always zero at free end
-                M_all[i] = 0.0
+        # Reactions
+        for a, R in reaction_forces.items():
+            if xi >= a:
+                shear += R
+                moment += R * (xi - a)
 
-                # SF zero ONLY if no load at free end
-                if not load_at_free_end:
-                    V_all[i] = 0.0
+        # Loads
+        for l in loads:
+            if l["type"] == "point" and xi >= l["pos"]:
+                shear -= l["value"]
+                moment -= l["value"] * (xi - l["pos"])
 
-        return {
-            "reactions": reactions,
-            "x": x_all,
-            "shear": V_all,
-            "moment": M_all
-        }
+            elif l["type"] == "udl" and xi >= l["start"]:
+                b = min(xi, l["end"])
+                Ld = b - l["start"]
+                shear -= l["value"] * Ld
+                moment -= l["value"] * Ld * (xi - (l["start"] + b) / 2)
+
+        V[i] = shear
+        M[i] = moment + moment_offset
+
+    return x, V, M
+
+
+# ==================================================
+# PLOT DIAGRAMS
+# ==================================================
+def plot_diagram(x, y, title, ylabel):
+    y = np.where(np.abs(y) < 1e-6, 0, y)
+
+    plt.figure(figsize=(10, 4))
+    plt.plot(x, y, linewidth=3)
+    plt.axhline(0, color="black")
+    plt.fill_between(x, y, 0, where=y >= 0, alpha=0.3)
+    plt.fill_between(x, y, 0, where=y <= 0, alpha=0.3)
+
+    plt.title(title)
+    plt.xlabel("Beam length (m)")
+    plt.ylabel(ylabel)
+    plt.grid(True, linestyle="--", alpha=0.4)
+    plt.show()
+
+
+# ==================================================
+# EXAMPLE USAGE
+# ==================================================
+if __name__ == "__main__":
+
+    beam = {"length": 6}
+
+    supports = [
+        {"pos": 0, "type": "fixed"}
+    ]
+
+    loads = [
+        {"type": "point", "pos": 4, "value": 10},
+        {"type": "udl", "start": 2, "end": 6, "value": 5}
+    ]
+
+    beam_model = Beam(beam, supports, loads)
+    reactions = beam_model.solve_reactions()
+
+    print("Reactions:")
+    for r in reactions:
+        print(r)
+
+    x, V, M = compute_sfd_bmd(beam, supports, loads, reactions)
+
+    plot_diagram(x, V, "Shear Force Diagram", "Shear Force")
+    plot_diagram(x, M, "Bending Moment Diagram", "Bending Moment")
