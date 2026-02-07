@@ -5,7 +5,7 @@ import matplotlib.pyplot as plt
 # FEM SOLVER (REACTIONS ONLY)
 # ======================================================
 
-class BeamStiffnessSolver:
+class Beam:
     def __init__(self, data, E=2e11, I=8e-6):
         self.beam = data["beam"]
         self.supports = data["supports"]
@@ -202,7 +202,7 @@ if __name__ == "__main__":
         ]
     }
 
-    solver = BeamStiffnessSolver(data)
+    solver = Beam(data)
     reactions = solver.solve()
 
     x, V, M = compute_sfd_bmd(
