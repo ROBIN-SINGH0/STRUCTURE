@@ -36,36 +36,28 @@ def generate_labels(n):
 
 # -----------------------------
 # SF AT POINT (FRIEND LOGIC)
-# ✅ KEEP ONLY THIS
 def sf_at_x(xp, reactions, point_loads, udls, uvls):
-    Vx = 0.0
+    V = 0.0
 
-    # reactions (LEFT)
+    # reactions on RIGHT
     for xr, R in reactions.items():
-        if xp > xr:
-            Vx += R
+        if xr > xp:
+            V -= R
 
-    # point loads (LEFT)
+    # point loads on RIGHT
     for xl, P in point_loads:
-        if xp > xl:
-            Vx -= abs(P)
+        if xl > xp:
+            V += abs(P)
 
-    # UDL (LEFT)
+    # UDL on RIGHT
     for x1, x2, w in udls:
-        if xp > x1:
-            L = min(xp, x2) - x1
-            if L > 0:
-                Vx -= abs(w) * L
+        a = max(xp, x1)
+        b = x2
+        if b > a:
+            V += abs(w) * (b - a)
 
-    # UVL (LEFT)
-    for x1, x2, w1, w2 in uvls:
-        if xp > x1:
-            L = min(xp, x2) - x1
-            if L > 0:
-                w_avg = (abs(w1) + abs(w2)) / 2
-                Vx -= w_avg * L
+    return V
 
-    return Vx
 
 
 
@@ -73,38 +65,29 @@ def sf_at_x(xp, reactions, point_loads, udls, uvls):
 # -----------------------------
 # BM AT POINT (FRIEND LOGIC)  ✅ KEEP ONLY THIS
 def bm_at_x(xp, reactions, point_loads, udls, uvls):
-    Mx = 0.0
+    M = 0.0
 
-    # reactions
+    # reactions on RIGHT
     for xr, R in reactions.items():
-        if xp > xr:
-            Mx += R * (xp - xr)
+        if xr > xp:
+            M -= R * (xr - xp)
 
-    # point loads
+    # point loads on RIGHT
     for xl, P in point_loads:
-        if xp > xl:
-            Mx -= abs(P) * (xp - xl)
+        if xl > xp:
+            M += abs(P) * (xl - xp)
 
-    # UDL
+    # UDL on RIGHT
     for x1, x2, w in udls:
-        if xp > x1:
-            a = x1
-            b = min(xp, x2)
-            if b > a:
-                L = b - a
-                Mx -= abs(w) * L * (xp - (a + b) / 2)
+        a = max(xp, x1)
+        b = x2
+        if b > a:
+            L = b - a
+            xc = (a + b) / 2
+            M += abs(w) * L * (xc - xp)
 
-    # UVL
-    for x1, x2, w1, w2 in uvls:
-        if xp > x1:
-            a = x1
-            b = min(xp, x2)
-            if b > a:
-                L = b - a
-                w_avg = (abs(w1) + abs(w2)) / 2
-                Mx -= w_avg * L * (xp - (a + b) / 2)
+    return M
 
-    return Mx
 
 
 # -----------------------------
