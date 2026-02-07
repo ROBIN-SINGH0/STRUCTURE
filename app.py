@@ -36,56 +36,53 @@ def generate_labels(n):
 
 # -----------------------------
 # SF AT POINT (FRIEND LOGIC)
-def bm_at_x(xp, reactions, point_loads, udls, uvls):
-    BM = 0.0
+def sf_at_x(xp, reactions, point_loads, udls, uvls):
+    Vx = 0.0
 
-    # reactions (left of section)
+    # reactions
     for xr, R in reactions.items():
-        if xr < xp:
-            BM -= R * (xp - xr)
+        if xp > xr:
+            Vx += R
 
-    # point loads (left of section)
+    # point loads
     for xl, P in point_loads:
-        if xl < xp:
-            BM -= P * (xp - xl)
+        if xp > xl:
+            Vx -= abs(P)
 
     # UDL
     for x1, x2, w in udls:
-        a = x1
-        b = min(xp, x2)
-        if b > a:
-            L = b - a
-            BM -= w * L * (xp - (a + b)/2)
+        if xp > x1:
+            L = min(xp, x2) - x1
+            if L > 0:
+                Vx -= abs(w) * L
 
     # UVL
     for x1, x2, w1, w2 in uvls:
-        a = x1
-        b = min(xp, x2)
-        if b > a:
-            L = b - a
-            w_avg = (w1 + w2) / 2
-            BM -= w_avg * L * (xp - (a + b)/2)
+        if xp > x1:
+            L = min(xp, x2) - x1
+            if L > 0:
+                w_avg = (abs(w1) + abs(w2)) / 2
+                Vx -= w_avg * L
 
-    return BM
-
+    return Vx
 
 
 # -----------------------------
-# BM AT POINT (FRIEND LOGIC)
+# BM AT POINT (FRIEND LOGIC)  ✅ KEEP ONLY THIS
 def bm_at_x(xp, reactions, point_loads, udls, uvls):
     Mx = 0.0
 
-    # reactions (ADD)
+    # reactions
     for xr, R in reactions.items():
         if xp > xr:
             Mx += R * (xp - xr)
 
-    # point loads (SUBTRACT magnitude)
+    # point loads
     for xl, P in point_loads:
         if xp > xl:
             Mx -= abs(P) * (xp - xl)
 
-    # UDL (SUBTRACT magnitude)
+    # UDL
     for x1, x2, w in udls:
         if xp > x1:
             a = x1
@@ -94,7 +91,7 @@ def bm_at_x(xp, reactions, point_loads, udls, uvls):
                 L = b - a
                 Mx -= abs(w) * L * (xp - (a + b) / 2)
 
-    # UVL (average magnitude)
+    # UVL
     for x1, x2, w1, w2 in uvls:
         if xp > x1:
             a = x1
@@ -160,10 +157,7 @@ with st.expander("📍 Point Loads"):
     for i in range(n_pl):
         c1, c2 = st.columns(2)
         with c1:
-            P = get_float(
-                f"P{i+1} (N)  ↓ downward = NEGATIVE",
-                "-300"
-            )
+            P = get_float(f"P{i+1} (N)", "-300")
         with c2:
             xp = get_float(f"x{i+1} (m)", str(L/2))
         beam.add_point_load(xp, P)
@@ -177,10 +171,7 @@ with st.expander("📐 Uniformly Distributed Load (UDL)"):
     for i in range(n_udl):
         c1, c2, c3 = st.columns(3)
         with c1:
-            w = get_float(
-                f"w{i+1} (N/m)  ↓ downward = NEGATIVE",
-                "-1"
-            )
+            w = get_float(f"w{i+1} (N/m)", "-1")
         with c2:
             x1 = get_float(f"Start x{i+1} (m)", "0.0")
         with c3:
@@ -196,13 +187,13 @@ with st.expander("📊 Uniformly Varying Load (UVL)"):
     for i in range(n_uvl):
         c1, c2, c3, c4 = st.columns(4)
         with c1:
-            w1 = get_float(f"w1{i+1} (N/m)", "0")
+            w1 = get_float(f"w1{i+1}", "0")
         with c2:
-            w2 = get_float(f"w2{i+1} (N/m)", "-1")
+            w2 = get_float(f"w2{i+1}", "-1")
         with c3:
-            x1 = get_float(f"Start x{i+1} (m)", "0.0")
+            x1 = get_float(f"Start x{i+1}", "0.0")
         with c4:
-            x2 = get_float(f"End x{i+1} (m)", str(L))
+            x2 = get_float(f"End x{i+1}", str(L))
         beam.add_uvl(x1, x2, w1, w2)
 
 
@@ -212,90 +203,22 @@ with st.expander("📊 Uniformly Varying Load (UVL)"):
 if st.button("🚀 Solve Beam", use_container_width=True):
 
     result = beam.solve(npts=300)
-
-    x = result["x"]
-    V = result["shear"]
-    M = result["moment"]
     reactions = result["reactions"]
 
     st.success("Analysis completed")
 
-    # -----------------------------
-    # Reactions
-    # -----------------------------
-    st.markdown("## 🔵 Support Reactions (Magnitude)")
-    for xs, r in reactions.items():
-        st.write(f"Reaction at x = {xs} m = **{abs(r)} N**")
-
-    # -----------------------------
-    # Key points
-    # -----------------------------
-    key_points = {0, L}
-
-    for xp, _ in beam.point_loads:
-        key_points.add(xp)
-
-    for x1, x2, _ in beam.udls:
-        key_points.update([x1, x2])
-
-    for x1, x2, _, _ in beam.uvls:
-        key_points.update([x1, x2])
-
-    for xs in beam.supports:
-        key_points.add(xs)
-
-    key_points = sorted(key_points)
-    labels = generate_labels(len(key_points))
-
     st.markdown("## 📘 Shear Force & Bending Moment (Book Answers)")
 
+    key_points = sorted({0, L} | set(x for x, _ in beam.point_loads))
+
+    labels = generate_labels(len(key_points))
+
     for lbl, xp in zip(labels, key_points):
-
-        SF_exact = sf_at_x(
-            xp,
-            reactions,
-            beam.point_loads,
-            beam.udls,
-            beam.uvls
-        )
-
-        BM_exact = bm_at_x(
-            xp,
-            reactions,
-            beam.point_loads,
-            beam.udls,
-            beam.uvls
-        )
+        SF = sf_at_x(xp, reactions, beam.point_loads, beam.udls, beam.uvls)
+        BM = bm_at_x(xp, reactions, beam.point_loads, beam.udls, beam.uvls)
 
         st.write(
             f"**Point {lbl} (x = {xp} m)** → "
-            f"S.F. = {abs(round(SF_exact, 3))} N , "
-            f"B.M. = {abs(round(BM_exact, 3))} N·m"
+            f"S.F. = {abs(round(SF, 3))} N , "
+            f"B.M. = {abs(round(BM, 3))} N·m"
         )
-
-    # -----------------------------
-    # Diagrams
-    # -----------------------------
-    col1, col2 = st.columns(2)
-
-    with col1:
-        fig, ax = plt.subplots()
-        ax.step(x, V, where="post")
-        ax.axhline(0)
-        ax.set_title("Shear Force Diagram (Signed)")
-        ax.set_xlabel("Length (m)")
-        ax.set_ylabel("Shear Force (N)")
-        ax.grid(True)
-        st.pyplot(fig)
-        plt.close(fig)
-
-    with col2:
-        fig, ax = plt.subplots()
-        ax.plot(x, M)
-        ax.axhline(0)
-        ax.set_title("Bending Moment Diagram (Signed)")
-        ax.set_xlabel("Length (m)")
-        ax.set_ylabel("Bending Moment (N·m)")
-        ax.grid(True)
-        st.pyplot(fig)
-        plt.close(fig)
