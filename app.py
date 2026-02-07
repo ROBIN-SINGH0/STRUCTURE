@@ -37,7 +37,7 @@ def generate_labels(n):
 # -----------------------------
 
 # ✅ KEEP ONLY THIS
-def sf_at_x(xp, reactions, point_loads, udls, uvls, L):
+def sf_at_x(xp, reactions, point_loads, udls, uvls):
     Vx = 0.0
     tol = 1e-6
 
